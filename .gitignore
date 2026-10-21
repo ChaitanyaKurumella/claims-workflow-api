@@ -1,6 +1,9 @@
-bin/
-obj/
-.vs/
-TestResults/
-*.user
+**/bin/
+**/obj/
+**/data/
+**/wwwroot/
+web/node_modules/
+web/dist/
+web/.angular/
 .env
+.DS_Store
