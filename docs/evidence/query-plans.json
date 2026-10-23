@@ -1,0 +1,18 @@
+{
+  "page": [
+    [
+      4,
+      0,
+      0,
+      "SEARCH claims USING COVERING INDEX ix_claims_status_id (status=? AND id>?)"
+    ]
+  ],
+  "sla": [
+    [
+      5,
+      0,
+      0,
+      "SEARCH claims USING INDEX ix_claims_due (due_at<?)"
+    ]
+  ]
+}

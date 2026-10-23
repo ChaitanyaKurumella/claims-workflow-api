@@ -1,0 +1,337 @@
+<div class="shell">
+  <aside>
+    <a class="brand" href="/">c<span>•</span> <b>CLAIMDESK</b></a>
+    <div class="workspace-label">OPERATIONS PLATFORM <span>02</span></div>
+    <nav>
+      <button
+        [class.active]="view === 'workspace'"
+        (click)="view = 'workspace'"
+      >
+        ◫ <span>Claims workspace</span
+        ><small>{{ claims.length }}</small></button
+      ><button
+        [class.active]="view === 'operations'"
+        (click)="openOperations()"
+        [disabled]="role === 'Reviewer'"
+      >
+        ⇄ <span>Integration monitor</span></button
+      ><button
+        [class.active]="view === 'architecture'"
+        (click)="view = 'architecture'"
+      >
+        ◇ <span>System design</span>
+      </button>
+    </nav>
+    <div class="aside-note">
+      <span class="live-dot"></span> Transactional by design
+      <p>Versioned decisions.<br />Traceable operations.</p>
+    </div>
+    <div class="profile">
+      <div class="avatar">{{ role.slice(0, 1) || "?" }}</div>
+      <div>
+        <b>{{ actor || "Not connected" }}</b
+        ><small>{{ role || "Choose a session" }}</small>
+      </div>
+    </div>
+  </aside>
+  <div class="body">
+    <header>
+      <span
+        >Operations <b>/</b>
+        {{
+          view === "operations"
+            ? "Integration monitor"
+            : view === "architecture"
+              ? "System design"
+              : "Claims workspace"
+        }}</span
+      >
+      <div>
+        <span class="environment">LOCAL / SYNTHETIC DATA</span
+        ><button class="quiet" [disabled]="busy" (click)="refreshAll()">
+          ↻ Refresh
+        </button>
+      </div>
+    </header>
+    <main>
+      <section class="session" *ngIf="!actor || demo">
+        <span *ngIf="demo">Demo workspace · Switch perspective</span>
+        <div class="role-switch" *ngIf="demo">
+          <button
+            *ngFor="let r of roles"
+            [class.chosen]="role === r"
+            [disabled]="busy"
+            (click)="demoLogin(r)"
+          >
+            {{ r }}
+          </button>
+        </div>
+        <ng-container *ngIf="!demo"
+          ><label
+            >API key or Bearer access token<input
+              type="password"
+              [(ngModel)]="key"
+              autocomplete="off" /></label
+          ><button (click)="connect()">Connect</button></ng-container
+        >
+      </section>
+      <div class="notice" role="status" *ngIf="message" [class.error]="error">
+        {{ message
+        }}<button
+          class="quiet"
+          (click)="message = ''"
+          aria-label="Dismiss message"
+        >
+          ×
+        </button>
+      </div>
+      <ng-container *ngIf="view === 'workspace'"
+        ><div class="heading">
+          <div>
+            <p class="eyebrow">CLAIMS OPERATIONS</p>
+            <h1>A clearer path to resolution.</h1>
+            <p>Manage the exceptions. Keep every decision accountable.</p>
+          </div>
+          <button
+            class="primary"
+            [disabled]="!actor"
+            (click)="showCreate = !showCreate"
+          >
+            ＋ New claim
+          </button>
+        </div>
+        <div class="metrics">
+          <article>
+            <span>OPEN EXPOSURE <i>↗</i></span
+            ><strong>{{
+              exposure | currency: "USD" : "symbol" : "1.0-0"
+            }}</strong
+            ><small>{{ openCount }} active claims in loaded pages</small>
+          </article>
+          <article>
+            <span>REVIEW QUEUE <i>◷</i></span
+            ><strong
+              >{{ count("Submitted") + count("InReview") }}
+              <em>claims</em></strong
+            ><small>Intake and assigned claims in loaded pages</small>
+          </article>
+          <article class="highlight">
+            <span>SUPERVISOR ATTENTION <i>◇</i></span
+            ><strong>{{ count("PendingSupervisor") }} <em>pending</em></strong
+            ><small>Independent sign-off · $10k and above</small>
+          </article>
+          <article>
+            <span>RESOLVED <i>✓</i></span
+            ><strong
+              >{{ count("Approved") + count("Rejected") }}
+              <em>claims</em></strong
+            ><small
+              >{{ count("Approved") }} approved ·
+              {{ count("Rejected") }} rejected</small
+            >
+          </article>
+        </div>
+        <section class="panel intake" *ngIf="showCreate">
+          <div class="section-title">
+            <h2>Claim intake</h2>
+            <span>01 / Start a traceable workflow</span>
+          </div>
+          <form (ngSubmit)="create()">
+            <div class="form-grid">
+              <label
+                >Reference<input
+                  name="reference"
+                  [(ngModel)]="draft.reference"
+                  required
+                  maxlength="64"
+                  placeholder="CLM-2026-0849" /></label
+              ><label
+                >Amount · USD<input
+                  name="amount"
+                  type="number"
+                  [(ngModel)]="draft.amount"
+                  min="0.01"
+                  max="1000000"
+                  step="0.01"
+                  required /></label
+              ><label
+                >Category<select name="category" [(ngModel)]="draft.category">
+                  <option>Medical</option>
+                  <option>Property</option>
+                  <option>Travel</option>
+                  <option>Liability</option>
+                </select></label
+              ><label
+                >Priority<select name="priority" [(ngModel)]="draft.priority">
+                  <option>Normal</option>
+                  <option>Urgent</option>
+                </select></label
+              >
+            </div>
+            <label
+              >Case summary<textarea
+                name="description"
+                [(ngModel)]="draft.description"
+                maxlength="2000"
+                placeholder="Describe the synthetic claim and evidence to review"
+              ></textarea>
+            </label>
+            <div class="form-foot">
+              <small
+                >Urgent: 4h SLA · Normal: 24h SLA · Submission retries use the
+                same request key.</small
+              ><button
+                class="primary"
+                [disabled]="busy || !draft.reference.trim()"
+              >
+                Submit claim
+              </button>
+            </div>
+          </form>
+        </section>
+        <section class="panel">
+          <div class="section-title">
+            <div>
+              <h2>
+                Claims register <span class="counter">{{ claims.length }}</span>
+              </h2>
+              <p>
+                Search and counts cover loaded pages. Load more to expand the
+                register.
+              </p>
+            </div>
+            <input
+              class="search"
+              [(ngModel)]="query"
+              placeholder="Search reference or category"
+              aria-label="Search claims"
+            />
+          </div>
+          <div class="tabs">
+            <button
+              *ngFor="let s of filters"
+              [class.selected]="filter === s"
+              (click)="filter = s"
+            >
+              {{ label(s) }}
+              <small>{{ s === "All" ? claims.length : count(s) }}</small>
+            </button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>CLAIM / CATEGORY</th>
+                  <th>AMOUNT</th>
+                  <th>WORKFLOW</th>
+                  <th>ASSIGNEE</th>
+                  <th>REVIEW DEADLINE</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  *ngFor="let c of visible"
+                  [class.focused]="selected?.id === c.id"
+                  (click)="select(c)"
+                >
+                  <td>
+                    <button class="reference">{{ c.reference }}</button
+                    ><small
+                      >{{ c.category }}
+                      <span *ngIf="c.priority === 'Urgent'" class="urgent"
+                        >· Urgent</span
+                      ></small
+                    >
+                  </td>
+                  <td class="amount">{{ c.amount | currency }}</td>
+                  <td>
+                    <span class="badge" [attr.data-status]="c.status">{{
+                      label(c.status)
+                    }}</span>
+                  </td>
+                  <td>
+                    <span class="assignee" *ngIf="c.assignee">{{
+                      c.assignee
+                    }}</span
+                    ><span class="muted" *ngIf="!c.assignee">Unassigned</span>
+                  </td>
+                  <td>
+                    <span [class.overdue]="overdue(c)">{{
+                      c.dueAt | date: "MMM d, HH:mm"
+                    }}</span
+                    ><small *ngIf="c.escalated">SLA escalated</small>
+                  </td>
+                  <td>↗</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="empty" *ngIf="!visible.length">
+              No claims match this view.
+            </div>
+          </div>
+          <div class="table-footer">
+            <span>{{ visible.length }} claims in loaded pages</span
+            ><span
+              ><button
+                *ngIf="nextCursor"
+                [disabled]="busy"
+                (click)="loadMore()"
+              >
+                Load more claims
+              </button></span
+            >
+          </div>
+        </section>
+        <case-workspace
+          *ngIf="selected as c"
+          [c]="c"
+          [events]="events"
+          [actor]="actor"
+          [role]="role"
+          [busy]="busy"
+          [(note)]="note"
+          (command)="act($event)"
+        ></case-workspace
+      ></ng-container>
+      <integration-monitor
+        *ngIf="view === 'operations'"
+        [ops]="ops"
+        [busy]="busy"
+        (retry)="retry($event)"
+      ></integration-monitor
+      ><ng-container *ngIf="view === 'architecture'"
+        ><div class="heading">
+          <div>
+            <p class="eyebrow">ENGINEERING NOTES</p>
+            <h1>Complexity with a purpose.</h1>
+            <p>Explore the guarantees behind the workflow.</p>
+          </div>
+        </div>
+        <div class="design-flow">
+          <span>Angular workspace</span><b>→</b
+          ><span>ASP.NET Core / role policy</span><b>→</b
+          ><span>SQLite transaction</span><b>→</b
+          ><span>Outbox worker / delivery adapter</span>
+        </div>
+        <div class="design-grid">
+          <article class="panel" *ngFor="let d of designs">
+            <span class="eyebrow">{{ d[0] }}</span>
+            <h2>{{ d[1] }}</h2>
+            <p>{{ d[2] }}</p>
+          </article>
+        </div>
+        <p class="scope">
+          Portfolio environment: role-scoped service keys and optional demo
+          sessions. A production deployment needs personal identity via OIDC,
+          managed secrets, and operational hardening. The integration target is
+          a local durable sink.
+        </p></ng-container
+      >
+      <footer>
+        <span>CLAIMDESK / Engineering portfolio</span
+        ><span>ASP.NET Core · Angular · SQLite · Transactional outbox</span>
+      </footer>
+    </main>
+  </div>
+</div>

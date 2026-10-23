@@ -1,74 +1,68 @@
-# ClaimDesk — claims operations platform
+# ClaimDesk — claims workflow and delivery
 
-An end-to-end ASP.NET Core and Angular application for claims intake, assigned review, independent supervisor approval, and reliable event delivery.
+ASP.NET Core 8, Angular 20 and SQLite. A claims operations application demonstrating independent approval, transactional audit/outbox writes, schema evolution, personal token identities and recoverable HTTP delivery.
 
-Independent portfolio project built with AI assistance and synthetic data. This repository demonstrates engineering decisions and tested guarantees; it does not claim production use or employer ownership.
+Independent portfolio project built with AI assistance and synthetic data. This repository shows implementation and reproducible evidence; it does not claim employer ownership, production usage or production scale.
 
-## Run the demo
+## Run locally
 
-Requires .NET 8 SDK, Node.js 22.12+, npm, and OpenSSL. From the repository root:
+Requires .NET 8 SDK, Node.js 22.12+, npm, Python 3 for operational exercises, and OpenSSL for generated demo keys.
 
 ```sh
 bash scripts/run-demo.sh
 ```
 
-Open **http://localhost:5081** and choose **Reviewer**. The script builds Angular, serves it from the API, generates role keys without displaying them, and seeds eight synthetic cases. The previous v0.1 demo and its JSON data are not used or overwritten. Demo mode is explicitly enabled by the script and must remain local.
+Open http://localhost:5081. Choose Reviewer, select `CLM-2026-0843`, record a rationale and request supervisor sign-off. Switch to Supervisor for the independent final decision. Inspect the audit trail and integration monitor. Demo mode and synthetic data must remain on loopback.
 
-Try a meaningful workflow:
+## Engineering evidence
 
-1. As Reviewer, select `CLM-2026-0843`, enter your rationale, and request supervisor sign-off.
-2. Switch to Supervisor and select the same case. Enter an independent rationale and approve it.
-3. Inspect the case's versioned decision trail, including both actors.
-4. Open Integration monitor to inspect durable event delivery. Refresh after the next worker cycle.
-5. Submit a new claim, assign it, and approve or reject it. Amounts below $10,000 require one reviewer; amounts at or above it require two distinct actors.
+| Concern | Implementation and evidence |
+|---|---|
+| Business rules | Pure `WorkflowPolicy`, evaluated inside the claim transaction; assignments, rationale, independent second approval and immutable final decisions |
+| Atomicity and concurrency | Claim, audit and outbox commit together; injected write failure rolls all three back; eight concurrent stores produce one decision |
+| Storage evolution | Three ordered transactional migrations; legacy JSON claims become relational rows with integer cents and constraints; preservation, rollback and future-version tests |
+| Bounded work | Keyset pages, status/id index, indexed SLA batches of 100; query plans retained in `docs/evidence` |
+| Delivery failure | Separate outbox persistence and HTTP adapter; 30s leases, fencing tokens, stable event keys, bounded retries, dead letters and recovery |
+| Personal identities | Standard JWT bearer validation against OIDC authority/audience; role mapping fails closed; issuer, audience, expiry and signature tests |
+| Frontend boundaries | Typed API transport and models, case workspace and integration monitor components, separate templates, policy and transport tests |
+| Operational recovery | SQLite online backup tool and restore test preserve claims, audit, outbox and event identity |
+| Measured behavior | Reproducible local read probe and real HTTP acknowledgement-gap exercise; raw results and limitations included |
 
-## What the implementation proves
-
-| Concern | Behavior | Evidence |
-|---|---|---|
-| Workflow governance | Assignment ownership, rationale required, two-person approval, immutable final decisions | `Store.Apply`, workflow and persistence tests |
-| Conflicting decisions | Every command carries a version; only one competing mutation commits | Eight independent SQLite connections race in a test |
-| Duplicate requests | Actor-scoped idempotency key replays original response; changed payload conflicts | Restart-safe idempotency table and test |
-| Transactional consistency | Claim, audit entry, and outbox event commit together | SQL transaction; rejected mutations create no additional events |
-| Background operations | 4h urgent / 24h normal SLA, one escalation event per active overdue case | Worker and deterministic deadline tests |
-| Integration failure | Exponential backoff, five attempts, dead letters, authorized replay | Failure injection and restart/recovery test |
-| Observability | Request IDs, structured request logs, .NET Meter counters and duration histogram | API middleware; export requires a configured telemetry listener |
-| Operational UI | Search, workflow filters, case detail, policy hints, audit timeline, delivery ledger | Angular production build and browser verification |
+35 backend test cases and six frontend tests were verified locally. Angular production build and application publish were verified. Check the GitHub Actions run for the status of the published revision.
 
 ## Verify
 
 ```sh
-dotnet test tests/Claims.Tests --configuration Release
-(cd web && npm ci && npm run build)
+dotnet test tests/Claims.Tests/Claims.Tests.csproj --configuration Release
+(cd web && npm ci && npm test && npm run build)
 ```
 
-CI runs the suite, builds Angular, publishes the API with static assets, and packages the application. A local passing run does not mean the GitHub workflow has run for unpushed changes.
+CI runs both suites, builds the frontend and packages the application. The frontend tests exercise display authorization and HTTP transport; they are not a substitute for a full browser regression suite.
 
 ## API
 
-Use `X-Api-Key` with a configured role key, or the loopback-only opt-in demo session cookie. Claims are synthetic USD amounts.
+Authenticated requests use `X-Api-Key` in service/demo mode, or `Authorization: Bearer ...` in OIDC mode. The UI accepts a token prefixed with `Bearer ` and keeps it only in memory.
 
-| Method / route | Purpose |
+| Route | Behavior |
 |---|---|
-| GET `/health` | Database readiness and schema |
+| GET `/health` | Database connection and schema readiness |
 | GET `/api/session` | Server-derived actor and role |
-| GET `/api/claims` | Claims register |
-| GET `/api/claims/{id}` | Current case and version |
-| GET `/api/claims/{id}/history` | Ordered actor-attributed audit events |
-| POST `/api/claims` | Intake; requires `Idempotency-Key` of 8–128 characters |
-| POST `/api/claims/{id}/assign` | Assign intake to caller |
-| POST `/api/claims/{id}/release` | Release review assignment |
-| POST `/api/claims/{id}/approve` | Approve or request supervisor sign-off |
-| POST `/api/claims/{id}/reject` | Reject with rationale |
-| GET `/api/operations` | Supervisor/admin delivery and SLA monitor |
-| POST `/api/operations/outbox/{id}/retry` | Replay a dead letter |
+| GET `/api/claims/page?limit=50&status=InReview&after=<id>` | Up to 100 items, opaque-to-client `nextCursor`; status optional |
+| GET `/api/claims` | Compatibility view, bounded to 100 claims |
+| GET `/api/claims/{id}` | Current claim/version |
+| GET `/api/claims/{id}/history` | Actor-attributed audit history |
+| POST `/api/claims` | Intake with actor-scoped `Idempotency-Key` of 8–128 characters |
+| POST `/api/claims/{id}/{assign,release,approve,reject}` | Versioned workflow command |
+| GET `/api/operations` | Aggregate totals and latest 200 delivery records; supervisor/admin only |
+| POST `/api/operations/outbox/{id}/retry` | Reset a dead letter for replay; supervisor/admin only |
 
-Commands carry `{"version":2,"note":"Evidence checked"}`. Decisions require a nonblank note. Errors use Problem Details: 400 invalid input, 401 missing access, 403 forbidden, 404 missing, 409 stale version or policy conflict. Refresh before retrying a conflicting decision; never blindly retry it.
+Commands carry `{"version":2,"note":"Evidence checked"}`. A conflict requires a fresh review. Intake retries must reuse the same key and payload. UI register filters, counts and exposure apply to loaded pages; the operations summary is computed across the database.
 
-## Engineering documentation
+## Read the decisions and limits
 
 - [Architecture and tradeoffs](docs/architecture.md)
-- [Operations, failure injection, and data](docs/operations.md)
-- [Verification record](docs/verification.md)
+- [Identity, integrations, backup and operational exercises](docs/operations.md)
+- [Verification and measured results](docs/verification.md)
+- [Decision records](docs/decisions.md)
 
-The integration target is a **local durable receipt sink**, not a live insurer or broker. Role keys identify service/demo actors rather than authenticated people. SQLite serializes writers and the register currently reads all claims; large-scale deployments need pagination, a server database, OIDC, and deployment-specific security and observability work. See the documentation for precise boundaries.
+SQLite remains a single-host writer architecture. Delivery is at least once and requires a deduplicating consumer. OIDC support is implemented and tested with signed local fixtures; no real identity tenant is provisioned. Logs and .NET meters exist, but telemetry export, dashboards, alerting and deployment SLOs remain deployment work. This is a stronger engineering sample, not a production certification.

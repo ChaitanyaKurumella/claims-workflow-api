@@ -1,44 +1,34 @@
-# Verification record
+# Verification record — 2026-10-21
 
-## Local release-mode checks
+## Automated checks
 
-- Backend: **19 passed, 0 failed, 0 skipped**, .NET 8 release configuration.
-- Angular: production build passes with strict TypeScript and template checking. Initial raw bundle approximately **261 kB**, estimated transfer **74 kB**. These are build estimates, not browser performance measurements.
-- Build uses Node.js 22.23.3 and .NET SDK 8.0.426 on macOS ARM64.
-- The test runner needs local socket access. macOS verification used `-p:UseAppHost=false` to avoid an apphost signing issue.
+- 35 backend cases pass in Release mode: HTTP validation and roles, workflow correctness, independent approval, transaction rollback, eight-store concurrency, idempotency, SLA, retries/dead letters, migration preservation/rollback/future-version rejection, online backup restoration, lease fencing/crash recovery, consumer deduplication and JWT issuer/audience/signature/expiry/role validation.
+- Six frontend tests pass: independent approval display policy, assignment/final-state controls, typed conflict handling, unchanged idempotent retries and non-JSON authentication errors and native fetch receiver binding.
+- Angular production compilation validates component templates and strict TypeScript models.
+- API Release publish succeeds.
 
-## Scenarios covered by automated tests
+JWT tests use signed local fixtures and static discovery configuration. They do not demonstrate a connection to a real OIDC tenant. Frontend tests exercise policy and transport rather than rendered browser components.
 
-1. Invalid references and amounts are rejected (five cases).
-2. Invalid category, priority, and null description are rejected (three cases).
-3. HTTP workflow requires assignment, current version, and rationale; final decisions conflict.
-4. Missing authentication is rejected, client role spoofing fails, reviewer operations are forbidden, and demo sessions are disabled by default.
-5. Missing claims return 404.
-6. High-value claims require a different supervisor; restart preserves claim, audit, and outbox state.
-7. Idempotency replays the original response, detects changed payloads, and rejects case-insensitive duplicate references.
-8. Eight independent store connections race to decide one version: exactly one wins, with no extra committed audit or outbox entries.
-9. Stale and unauthorized commands leave state and event counts unchanged.
-10. SLA escalation occurs once and invalidates stale review commands.
-11. Delivery failure backs off, dead-letters after five attempts, and recovers through replay after reopening storage.
-12. Final claims do not escalate.
-13. An injected SQLite trigger aborts outbox insertion after the claim update: the entire mutation rolls back, including claim state and audit insertion.
+## Real HTTP acknowledgement gap
 
-Parameterized cases explain the difference between the scenario count and the 19 test results.
+[evidence/http-delivery.json](evidence/http-delivery.json) records a separate loopback receiver/database. The receiver durably accepted an event and returned 503, then accepted the retry. Sender: Delivered, two attempts. Consumer: one durable receipt. Lease-expiry tests separately simulate sender termination before acknowledgement and reject stale completion tokens.
 
-## Browser checks
+## Local read measurement
 
-The local app was opened in the existing app tab at http://localhost:5081.
+[evidence/load-local.json](evidence/load-local.json) contains the raw result: 2,000 seeded claims, 2,000 authenticated first-page reads, 50 rows/page, eight clients, 20 warmups, worker disabled. Sequential seed and warmup time are excluded.
 
-- Reviewer session loaded the eight seeded cases.
-- Selecting a case displayed summary, owner, version, policy, and audit history.
-- Reviewer requested supervisor sign-off for a $12,600 claim with rationale. The case moved to PendingSupervisor and the audit trail retained the rationale.
-- Reviewer did not see final supervisor decision controls for that case.
-- Switching to Supervisor exposed those controls and enabled the integration monitor.
-- The monitor showed the new event Delivered, with no pending events or dead letters in the observed snapshot.
-- The live worker recorded overdue-case escalation and its audit event.
+Measured on this macOS arm64 host: 0.883 seconds, 2,265 requests/second, p50 3.15 ms, p95 5.08 ms, p99 6.27 ms, zero errors. This short loopback probe includes client/network/API work but benefits from warm caches and no competing writes. It is a smoke benchmark, not sustained capacity or production latency evidence. Repeat with `scripts/load.py` before comparing environments.
 
-The browser case was deliberately left pending for the user to exercise final approval. Final approval and rejection are verified by automated tests. Browser screenshot capture returned a tool error, so pixel-level visual QA and mobile viewport checks are not claimed. Intake is covered through API tests; the complete browser intake form sequence has not been exercised.
+[evidence/query-plans.json](evidence/query-plans.json) confirms status-page use of `ix_claims_status_id` and SLA use of `ix_claims_due`. Query plans and performance vary with SQLite, data distribution and host conditions.
+
+## Recovery evidence
+
+The migration test creates a version-1 database containing an existing claim plus audit/outbox children, upgrades it, checks preserved amounts/version/content and validates foreign keys. A corrupt legacy row forces migration rollback, retaining version 1 and original data. Backup recovery uses the online backup API and verifies the restored earlier claim state and event identity after the live database changes.
+
+## Browser workflow
+
+[evidence/browser-workflow.json](evidence/browser-workflow.json) records the isolated demo check: reviewer sign-off request, hidden reviewer final controls, independent supervisor approval, retained rationales/version history and delivered events. The online backup CLI also completed against that preview database.
 
 ## Boundaries
 
-These changes are local. GitHub CI has not run on them, no release has been published, and no public deployment, external integration, throughput benchmark, or production security assessment is claimed. The v0.1 JSON data remains separate.
+No production traffic, provider tenant, deployment SLO, sustained mixed workload, telemetry collector, full browser regression suite or disaster-recovery timing has been verified. GitHub CI status belongs to the exact published commit; consult its Actions run. The work does not imply production certification.

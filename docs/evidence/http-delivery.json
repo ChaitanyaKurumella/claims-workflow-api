@@ -1,0 +1,7 @@
+{
+  "scenario": "Receiver durably accepts event then returns HTTP 503; retry succeeds",
+  "sender_status": "Delivered",
+  "http_attempts": 2,
+  "durable_consumer_receipts": 1,
+  "result": "passed"
+}

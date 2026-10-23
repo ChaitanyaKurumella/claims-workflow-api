@@ -1,67 +1,67 @@
-# Architecture and design decisions
+# Architecture
 
-## Scope
-
-ClaimDesk models one claims operations team and synthetic USD claims. The application is a modular monolith: an Angular client, ASP.NET Core API, SQLite storage, and hosted background worker. Keeping these together makes transactional workflow guarantees explicit without introducing distributed deployment overhead.
+ClaimDesk is a single deployable API/worker with an Angular client and a local SQLite database. Its consistency boundary is one claim mutation, its audit record and its outbox entry.
 
 ```mermaid
 flowchart LR
-    UI[Angular workspace] --> API[ASP.NET Core / actor policy]
-    API --> TX[SQLite transaction]
-    TX --> C[Claims]
-    TX --> A[Audit]
-    TX --> O[Outbox]
-    W[Hosted worker] --> O
-    W --> R[Deduplicated local receipts]
-    W --> E[SLA escalation]
+    UI[Angular feature components] --> API[HTTP and validated actor]
+    API --> Policy[Pure WorkflowPolicy]
+    API --> Store[Claim persistence transaction]
+    Store --> Claims[Relational claims]
+    Store --> Audit[Audit]
+    Store --> Outbox[Outbox]
+    Worker[Hosted worker] --> Queue[OutboxStore: lease and completion]
+    Queue --> Outbox
+    Worker --> Adapter[HTTP delivery adapter]
+    Adapter --> Consumer[External deduplicating consumer]
 ```
 
-## State machine and authority
+## Boundaries
+
+`WorkflowPolicy` contains transitions and authorization, without storage, HTTP or time dependencies. `Store` owns claim persistence and the atomic audit/outbox write. `OutboxStore` owns leasing, retry and delivery persistence. `SqliteDatabase` centralizes connections and parameterized commands. `SchemaMigrator` owns ordered upgrades. `HttpEventDelivery` performs network I/O; `OutboxDispatcher` coordinates it without holding a database transaction. `OperationsWorker` schedules bounded delivery and SLA work.
+
+The Angular bootstrap imports the application component. Models and HTTP transport are independent modules; the case workspace and integration monitor have their own components/templates. The application component still coordinates intake, register loading and sessions; further splitting should follow feature growth. UI policy is a convenience; the server remains authoritative.
+
+## Workflow
 
 ```mermaid
 stateDiagram-v2
     [*] --> Submitted
-    Submitted --> InReview: reviewer assigns to self
+    Submitted --> InReview: assign to self
     InReview --> Submitted: release
-    InReview --> Approved: assigned actor approves amount below 10000
-    InReview --> PendingSupervisor: assigned actor approves amount at least 10000
-    InReview --> Rejected: assigned actor rejects with rationale
-    PendingSupervisor --> Approved: different supervisor approves
-    PendingSupervisor --> Rejected: different supervisor rejects
+    InReview --> Approved: assigned reviewer, below 10000 USD
+    InReview --> PendingSupervisor: assigned reviewer, at least 10000 USD
+    InReview --> Rejected: assigned reviewer with rationale
+    PendingSupervisor --> Approved: different supervisor with rationale
+    PendingSupervisor --> Rejected: different supervisor with rationale
     Approved --> [*]
     Rejected --> [*]
 ```
 
-Policy is enforced in the mutation transaction, not only in the UI. Supervisors may release another reviewer's assignment but cannot decide an InReview claim owned by someone else. A supervisor or administrator who performs the initial review cannot also perform the second approval. Every successful mutation increments the version. Final states reject further commands. All roles can submit and take intake claims; reviewer access to integration operations is forbidden.
+Supervisors can release another person's assignment. They cannot decide an InReview claim assigned to someone else. Any actor who performed the initial review is barred from the second approval, including administrators. Final decisions are immutable.
 
-## SQLite and concurrency
+## Persistence and migrations
 
-Schema version 1 creates claims, audit, idempotency, outbox, and integration_receipts tables plus indexes. Structured claim and audit data are stored as JSON documents inside relational tables; this reduces mapping overhead but sacrifices SQL querying and indexing of individual claim attributes. Reference uniqueness and receipt deduplication use database constraints.
+Migration 1 retains the original schema. Migration 2 converts JSON claim documents to relational columns, integer cents, status/version constraints and query indexes, preserving audit/outbox IDs and relationships. Audit/outbox payloads remain immutable JSON event snapshots. Migration 3 adds leases and a persistent database identity used to namespace event keys. Each upgrade and its version record commit in one transaction. Unknown future schemas fail startup. A corrupt legacy claim aborts the migration and retains the old schema/data. Tests exercise upgrades with existing child rows and `foreign_key_check`.
 
-Each write opens an immediate transaction; SQLite serializes writers across connections. The transaction reads the current version, validates ownership and transition, updates state, writes audit, and inserts an outbox record. Failure rolls back the entire unit. Two writers carrying version 2 cannot both commit a decision. The suite races eight independently constructed stores against the same file.
+Back up before upgrading. There is no automated downgrade: restore the verified backup with the matching prior application version. Migrations can hold SQLite's write lock and rebuild tables; large production databases need a separately planned maintenance window.
 
-The version check is application-level optimistic concurrency protected by SQLite's write transaction. It is not a row-version token or a PostgreSQL compare-and-swap implementation. Changing databases requires retaining the equivalent atomic boundary.
+SQLite immediate write transactions serialize writers, protecting the version check and mutation. This is not a server-database row-version implementation. SQL parameters protect query inputs; unique references are case insensitive. Actor-scoped idempotency retains the original intake response and rejects changed payloads under the same key.
 
-## Request idempotency
+Pages use UUID keyset ordering, not creation time. Their cursor is a last-seen ID, with at most 100 API rows. They are live views, not snapshot exports: concurrent inserts before the cursor may appear only after refresh. Filters and summary counts in the register cover loaded pages. Operations totals use database aggregates. History and idempotency retention remain unbounded; those policies require domain decisions.
 
-Intake requires a client-generated key scoped to the actor. The normalized typed request is the fingerprint. A repeated key with the same input returns the original creation response, even if the case later changed. The same key with different input conflicts. A separate case-insensitive reference constraint catches duplicates across keys. Rejected requests do not persist idempotency entries. The UI keeps the key for uncertain network retries; after a confirmed creation it generates another.
+SLA queries use a partial due-date index and process at most 100 overdue active claims per worker cycle. Escalation increments the version and records an audit/outbox entry exactly once per claim. It intentionally invalidates stale reviewer commands.
 
-Idempotency entries currently have no retention policy. The UI generates keys in memory: a browser reload loses an uncertain request key, though reference uniqueness still prevents duplicate claims. Persistent client retry queues would be a separate enhancement.
+## External delivery and crash windows
 
-## Outbox and failure handling
+A lease transaction selects one due event, increments its attempts, assigns a random fencing token and expires after 30 seconds. HTTP has a 10-second timeout and follows no redirects. Network I/O happens after the transaction commits. A 2xx response is acknowledged using the same fencing token. A stale worker cannot acknowledge a newer lease. Failures back off exponentially; five attempts dead-letter. A crash on the fifth attempt also becomes a dead letter after lease expiry.
 
-Every workflow mutation creates an outbox event in the same transaction. The worker dispatches at most 50 events per five-second cycle. Failed attempts back off 2, 4, 8, 16, and 32 seconds; the fifth failure marks the record DeadLetter. A supervisor/admin can reset that record for replay. Failure simulation is configuration-based, never an arbitrary outbound URL.
+Event identity is `<persistent-database-id>:<outbox-id>` and survives backups. A receiver can commit successfully while its response or the sender's acknowledgement is lost. The sender will replay that event. Consumers must deduplicate by event key in the same transaction as their business side effects. The included receiver demonstrates durable deduplication across a real 503/retry boundary. Delivery is at least once; global or per-claim ordering across multiple workers is not guaranteed. Retrying a dead letter retains its event identity.
 
-The local sink inserts a durable integration_receipts row keyed by event ID and marks delivery in one SQLite transaction. This gives atomic deduplicated local delivery. It is not a demonstration of an external exactly-once network delivery guarantee. An external adapter would publish with the stable event ID, acknowledge only after success, and rely on an idempotent consumer for at-least-once redelivery after a crash.
+With no DeliveryUrl, the original local receipt sink is used. It atomically stores receipt and delivery status in the same database and does not exercise a network boundary. External mode uses leases; do not switch modes while events are leased without allowing recovery. Outbox monitoring is bounded to the latest 200 events; totals include the full queue.
 
-## SLA processing
+## Identity and operation boundaries
 
-Normal cases receive 24 hours and urgent cases four hours at intake. Active overdue cases receive an escalation flag, incremented version, audit event, and outbox event once. Escalation does not force a decision or replace the workflow state. It invalidates stale reviewer commands intentionally. Deadline behavior is tested with explicit clock values instead of waiting in real time.
+OIDC mode uses the standard ASP.NET JWT bearer handler, HTTPS discovery, signature/issuer/audience/expiry validation, `sub` as actor ID and exactly one recognized `roles` claim. Missing or ambiguous recognized roles fail closed. Identity provisioning and correct role claims belong to the operator. OIDC mode refuses simultaneous demo sessions or service keys. Signed local token fixtures test acceptance and rejection; a real provider has not been connected.
 
-## Security and scaling boundaries
-
-Service keys are compared using SHA-256 and constant-time byte comparison. A configured key maps to a fixed server-side actor and role. Client-supplied role headers do not grant authority. This is role authorization for service/demo identities, not individual human authentication. OIDC, organization membership, personal identities, separation-of-duties policy, and key lifecycle management remain required for real users.
-
-Demo mode is opt-in; session creation only accepts loopback callers and same-origin requests. The HttpOnly SameSite=Strict cookie is for a local synthetic demonstration. Never expose demo mode through a reverse proxy or public tunnel. Demo sessions are in process memory and reset on restart.
-
-SQLite on local disk is appropriate for the local demonstration. A server database, paging and indexed queries, integration transport, distributed scheduler coordination, telemetry export, load testing, backup automation, and production identity would be needed for wider deployment. There is no claim of a measured production throughput or availability SLO.
+Demo/service mode uses fixed server-derived actors. Demo sessions require loopback plus same origin, use HttpOnly SameSite cookies, and remain process local. Shared keys do not prove personal identity. Never expose demo mode behind a public proxy. Production needs TLS, managed secrets, configured trusted proxies, abuse controls, telemetry collection and operational ownership. Existing structured logs and .NET Meter instruments need an external collector/listener. No production availability or throughput SLO is claimed.

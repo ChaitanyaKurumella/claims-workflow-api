@@ -1,0 +1,14 @@
+{
+  "environment": "isolated synthetic demo on localhost:5082",
+  "case": "CLM-2026-0843",
+  "checks": [
+    "Reviewer integration monitor disabled",
+    "Reviewer requested supervisor sign-off with rationale; version 2 to 3",
+    "Reviewer final approval controls absent while pending supervisor",
+    "Supervisor performed independent final approval with rationale; version 3 to 4",
+    "Final case displayed both actor rationales and no further decision controls",
+    "Integration monitor showed approval and sign-off events Delivered, no pending or dead letters",
+    "Online backup tool completed integrity and foreign-key checks"
+  ],
+  "result": "passed"
+}

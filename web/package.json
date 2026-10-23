@@ -1,1 +1,31 @@
-{"name":"claims-review-dashboard","private":true,"version":"1.0.0","scripts":{"build":"ng build"},"dependencies":{"@angular/common":"^20.3.0","@angular/compiler":"^20.3.0","@angular/core":"^20.3.0","@angular/platform-browser":"^20.3.0","@angular/forms":"^20.3.0","rxjs":"^7.8.2","tslib":"^2.8.1","zone.js":"~0.15.1"},"devDependencies":{"@angular/build":"^20.3.0","@angular/cli":"^20.3.0","typescript":"~5.9.2"}}
+{
+  "name": "claims-review-dashboard",
+  "private": true,
+  "version": "0.3.0",
+  "scripts": {
+    "build": "ng build",
+    "test": "tsc --target ES2022 --module commonjs --strict --skipLibCheck --outDir .test-build src/models.ts src/workflow-view.ts src/api-client.ts && node --test tests/*.test.cjs",
+    "format": "prettier --write \"src/**/*.{ts,html}\" \"tests/*.cjs\"",
+    "format:check": "prettier --check \"src/**/*.{ts,html}\" \"tests/*.cjs\""
+  },
+  "dependencies": {
+    "@angular/common": "^20.3.0",
+    "@angular/compiler": "^20.3.0",
+    "@angular/core": "^20.3.0",
+    "@angular/forms": "^20.3.0",
+    "@angular/platform-browser": "^20.3.0",
+    "rxjs": "^7.8.2",
+    "tslib": "^2.8.1",
+    "zone.js": "~0.15.1"
+  },
+  "devDependencies": {
+    "@angular/build": "^20.3.0",
+    "@angular/cli": "^20.3.0",
+    "prettier": "3.9.10",
+    "typescript": "~5.9.2"
+  },
+  "overrides": {
+    "vite": "^7.3.7",
+    "@modelcontextprotocol/sdk": "^1.32.0"
+  }
+}

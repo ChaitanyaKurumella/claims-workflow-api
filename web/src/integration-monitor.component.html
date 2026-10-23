@@ -1,0 +1,76 @@
+<ng-container
+  ><div class="heading">
+    <div>
+      <p class="eyebrow">RELIABILITY & DELIVERY</p>
+      <h1>Every event accounted for.</h1>
+      <p>
+        Transactional outbox with bounded retries and deduplicated delivery.
+      </p>
+    </div>
+  </div>
+  <div class="metrics" *ngIf="ops">
+    <article>
+      <span>PENDING DELIVERY</span><strong>{{ ops.pendingEvents }}</strong
+      ><small>Worker polls every five seconds</small>
+    </article>
+    <article>
+      <span>DEAD LETTERS</span><strong>{{ ops.deadLetters }}</strong
+      ><small>Five failed attempts before isolation</small>
+    </article>
+    <article>
+      <span>OVERDUE CLAIMS</span><strong>{{ ops.summary.overdue }}</strong
+      ><small>Escalated automatically by SLA worker</small>
+    </article>
+    <article>
+      <span>INTEGRATION SINK</span
+      ><strong class="word">{{ ops.deliveryMode }}</strong
+      ><small>Consumer must deduplicate event keys</small>
+    </article>
+  </div>
+  <section class="panel">
+    <div class="section-title">
+      <h2>Delivery ledger</h2>
+      <span>Latest 200 events</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>EVENT</th>
+            <th>TYPE</th>
+            <th>STATE</th>
+            <th>ATTEMPTS</th>
+            <th>NEXT ATTEMPT / ERROR</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let e of ops?.events">
+            <td>#{{ e.id }}</td>
+            <td>{{ label(e.type) }}</td>
+            <td>
+              <span class="badge" [attr.data-status]="e.status">{{
+                e.status
+              }}</span>
+            </td>
+            <td>{{ e.attempts }} / 5</td>
+            <td>
+              {{
+                e.status === "Pending" ? (e.nextAttempt | date: "medium") : "—"
+              }}<small>{{ e.lastError }}</small>
+            </td>
+            <td>
+              <button
+                *ngIf="e.status === 'DeadLetter'"
+                (click)="retry.emit(e.id)"
+                [disabled]="busy"
+              >
+                Retry delivery
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section></ng-container
+>

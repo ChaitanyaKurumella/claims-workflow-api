@@ -1,0 +1,100 @@
+<div class="detail-grid">
+  <section class="panel case">
+    <div class="section-title">
+      <div>
+        <p class="eyebrow">CASE WORKSPACE · VERSION {{ c.version }}</p>
+        <h2>{{ c.reference }}</h2>
+      </div>
+      <span class="badge" [attr.data-status]="c.status">{{
+        label(c.status)
+      }}</span>
+    </div>
+    <p class="description">
+      {{ c.description || "No case summary supplied." }}
+    </p>
+    <div class="case-facts">
+      <div>
+        <small>CLAIM VALUE</small><b>{{ c.amount | currency }}</b>
+      </div>
+      <div>
+        <small>REVIEW OWNER</small><b>{{ c.assignee || "Unassigned" }}</b>
+      </div>
+      <div>
+        <small>APPROVAL POLICY</small
+        ><b>{{
+          c.amount >= 10000 ? "Two-person approval" : "Reviewer decision"
+        }}</b>
+      </div>
+    </div>
+    <div *ngIf="!final(c)" class="decision">
+      <p *ngIf="c.status === 'PendingSupervisor'">
+        A different supervisor must independently review this claim.
+      </p>
+      <label *ngIf="c.status !== 'Submitted'"
+        >Decision rationale<textarea
+          [ngModel]="note"
+          (ngModelChange)="noteChange.emit($event)"
+          maxlength="1000"
+          placeholder="Record evidence, policy checks, and your reasoning"
+        ></textarea>
+      </label>
+      <div class="buttons">
+        <button
+          class="primary"
+          *ngIf="c.status === 'Submitted'"
+          [disabled]="busy"
+          (click)="command.emit('assign')"
+        >
+          Assign to me</button
+        ><ng-container *ngIf="canDecide(c)"
+          ><button
+            class="primary"
+            [disabled]="busy || !note.trim()"
+            (click)="command.emit('approve')"
+          >
+            {{
+              c.amount >= 10000 && c.status === "InReview"
+                ? "Request supervisor sign-off"
+                : "Approve claim"
+            }}</button
+          ><button
+            class="danger"
+            [disabled]="busy || !note.trim()"
+            (click)="command.emit('reject')"
+          >
+            Reject claim
+          </button></ng-container
+        ><button
+          class="quiet"
+          *ngIf="
+            c.status === 'InReview' &&
+            (c.assignee === actor || role !== 'Reviewer')
+          "
+          [disabled]="busy"
+          (click)="command.emit('release')"
+        >
+          Release assignment
+        </button>
+      </div>
+    </div>
+    <div class="final-note" *ngIf="final(c)">
+      ✓ Final decision recorded. The audit trail is retained.
+    </div>
+  </section>
+  <section class="panel">
+    <div class="section-title">
+      <h2>Decision trail</h2>
+      <span>{{ events.length }} events</span>
+    </div>
+    <ol class="timeline">
+      <li *ngFor="let e of events">
+        <div>
+          <b>{{ label(e.action) }}</b
+          ><time>{{ e.at | date: "MMM d, HH:mm:ss" }}</time>
+        </div>
+        <small>{{ e.actor }} · v{{ e.version }}</small>
+        <p>{{ e.note }}</p>
+      </li>
+    </ol>
+  </section>
+</div>
