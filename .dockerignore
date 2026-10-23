@@ -1,0 +1,13 @@
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/.test-build
+**/wwwroot
+.git
+*.zip
+*.bundle
+**/*.db
+**/*.db-*
+data
+artifacts

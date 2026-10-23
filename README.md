@@ -4,6 +4,27 @@ ASP.NET Core 8, Angular 20 and SQLite. A claims operations application demonstra
 
 Independent portfolio project built with AI assistance and synthetic data. This repository shows implementation and reproducible evidence; it does not claim employer ownership, production usage or production scale.
 
+## Evaluate in five minutes
+
+- [Published demo release](https://github.com/ChaitanyaKurumella/claims-workflow-api/releases/tag/v0.3.0-demo)
+- [Build and verification history](https://github.com/ChaitanyaKurumella/claims-workflow-api/actions)
+- [Three-minute walkthrough](docs/walkthrough.md)
+- [Zero-cost hosting readiness and limits](docs/free-hosting.md)
+
+A public interactive demo is not deployed yet. The local demo uses synthetic data and deliberately restricts role switching to loopback. The release is runnable locally without buying hosting.
+
+```mermaid
+flowchart LR
+  UI[Angular workspace] --> API[ASP.NET Core API]
+  API --> Policy[Workflow policy]
+  API --> DB[(SQLite: claims + audit + outbox)]
+  DB --> Worker[Lease-based outbox worker]
+  Worker --> Receiver[HTTP receiver: deduplicate event key]
+  OIDC[OIDC identity provider] --> API
+```
+
+The claim change, audit record and outbox event commit in one transaction. HTTP delivery happens afterward, with retries and receiver deduplication.
+
 ## Run locally
 
 Requires .NET 8 SDK, Node.js 22.12+, npm, Python 3 for operational exercises, and OpenSSL for generated demo keys.
