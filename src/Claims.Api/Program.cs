@@ -9,6 +9,9 @@ using System.Diagnostics.Metrics;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails();
+var publicDemo = builder.Configuration.GetValue<bool>("Claims:PublicDemo");
+var demo = builder.Configuration.GetValue<bool>("Claims:DemoMode");
+if (publicDemo) builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 16384);
 var identities = new List<(byte[] Hash, Actor Actor)>();
 foreach (var role in new[]
 {
@@ -55,9 +58,18 @@ if (authority is not null)
     builder.Services.AddAuthorization();
 }
 
-if (identities.Count == 0 && authority is null)
+if (identities.Count == 0 && authority is null && !publicDemo)
     throw new InvalidOperationException("Configure Claims__ReviewerKey, Claims__SupervisorKey and Claims__AdministratorKey.");
-builder.Services.AddSingleton(new Store(builder.Configuration["Claims:DataPath"] ?? "data/claims-v2.db"));
+if (publicDemo && (!demo || authority is not null || identities.Count > 0 || builder.Configuration["Claims:DeliveryUrl"] is { Length: > 0 }))
+    throw new InvalidOperationException("Public demo requires demo mode, no service keys, no OIDC and no external delivery.");
+if (publicDemo)
+{
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddSingleton<DemoWorkspaces>();
+    builder.Services.AddScoped(sp => (Store)sp.GetRequiredService<IHttpContextAccessor>().HttpContext!.Items["demo-store"]!);
+}
+else
+    builder.Services.AddSingleton(new Store(builder.Configuration["Claims:DataPath"] ?? "data/claims-v2.db"));
 if (builder.Configuration["Claims:DeliveryUrl"] is { Length: > 0 } deliveryUrl)
 {
     if (!Uri.TryCreate(deliveryUrl, UriKind.Absolute, out var target) || (target.Scheme != "https" && !(target.Scheme == "http" && target.IsLoopback)))
@@ -67,18 +79,40 @@ if (builder.Configuration["Claims:DeliveryUrl"] is { Length: > 0 } deliveryUrl)
     builder.Services.AddTransient<OutboxDispatcher>();
 }
 
-builder.Services.AddHostedService<OperationsWorker>();
-var demo = builder.Configuration.GetValue<bool>("Claims:DemoMode");
+if (!publicDemo) builder.Services.AddHostedService<OperationsWorker>();
 var demoSessions = new System.Collections.Concurrent.ConcurrentDictionary<string, Actor>();
 if (authority is not null && (demo || identities.Count > 0))
     throw new InvalidOperationException("OIDC mode cannot be combined with demo sessions or service role keys.");
 var app = builder.Build();
-if (demo && builder.Configuration.GetValue<bool>("Claims:SeedDemo"))
+if (!publicDemo && demo && builder.Configuration.GetValue<bool>("Claims:SeedDemo"))
     DemoData.Seed(app.Services.GetRequiredService<Store>());
 using var meter = new Meter("Claims.Operations", "2.0.0");
 var requests = meter.CreateCounter<long>("claims.http.requests");
 var duration = meter.CreateHistogram<double>("claims.http.duration", "ms");
 app.UseExceptionHandler();
+// Render terminates TLS. Trust only the scheme, never forwarded host or client identity.
+if (publicDemo)
+{
+    var forwarded = new Microsoft.AspNetCore.Builder.ForwardedHeadersOptions
+    {
+        ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto,
+        ForwardLimit = 1
+    };
+    forwarded.KnownNetworks.Clear();
+    forwarded.KnownProxies.Clear();
+    app.UseForwardedHeaders(forwarded);
+    app.Use(async (HttpContext context, RequestDelegate next) =>
+    {
+        if (!context.Request.IsHttps && !System.Net.IPAddress.IsLoopback(context.Connection.RemoteIpAddress ?? System.Net.IPAddress.None))
+        {
+            context.Response.StatusCode = 400;
+            return;
+        }
+        if (context.Request.Path.StartsWithSegments("/api") || context.Request.Path.StartsWithSegments("/demo/session"))
+            await context.RequestServices.GetRequiredService<DemoWorkspaces>().Invoke(context, next);
+        else await next(context);
+    });
+}
 if (authority is not null)
     app.UseAuthentication();
 app.Use(async (context, next) =>
@@ -108,7 +142,11 @@ app.Use(async (context, next) =>
             }
 
             if (actor is null && demo && context.Request.Cookies["claims-demo"] is { } token)
-                demoSessions.TryGetValue(token, out actor);
+            {
+                if (publicDemo && context.Items["demo-workspace"] is DemoWorkspace workspace)
+                    actor = new(workspace.Role.ToLowerInvariant() + "-01", workspace.Role);
+                else demoSessions.TryGetValue(token, out actor);
+            }
             if (actor is null)
             {
                 context.Response.StatusCode = 401;
@@ -151,10 +189,15 @@ app.UseStaticFiles();
 app.MapGet("/demo/config", () => Results.Ok(new { enabled = demo }));
 app.MapPost("/demo/session/{role}", (string role, HttpContext c) =>
 {
-    if (!demo || c.Connection.RemoteIpAddress is not { } remote || !System.Net.IPAddress.IsLoopback(remote) || role is not ("Reviewer" or "Supervisor" or "Administrator"))
+    if (!demo || (!publicDemo && (c.Connection.RemoteIpAddress is not { } remote || !System.Net.IPAddress.IsLoopback(remote))) || role is not ("Reviewer" or "Supervisor" or "Administrator"))
         return Results.NotFound();
     if (c.Request.Headers.Origin.ToString() != $"{c.Request.Scheme}://{c.Request.Host}")
         return Results.StatusCode(403);
+    if (publicDemo)
+    {
+        ((DemoWorkspace)c.Items["demo-workspace"]!).Role = role;
+        return Results.Ok(new { role });
+    }
     if (c.Request.Cookies["claims-demo"] is { } previous)
         demoSessions.TryRemove(previous, out _);
     var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
@@ -162,9 +205,9 @@ app.MapPost("/demo/session/{role}", (string role, HttpContext c) =>
     c.Response.Cookies.Append("claims-demo", token, new CookieOptions { HttpOnly = true, SameSite = SameSiteMode.Strict, Secure = c.Request.IsHttps, MaxAge = TimeSpan.FromHours(2) });
     return Results.Ok(new { role });
 });
-app.MapGet("/health", (Store store) =>
+app.MapGet("/health", (IServiceProvider services) =>
 {
-    store.CheckHealth();
+    if (!publicDemo) services.GetRequiredService<Store>().CheckHealth();
     return Results.Ok(new { status = "healthy", storage = "sqlite", schema = SchemaMigrator.CurrentVersion });
 });
 app.MapGet("/api/session", (HttpContext c) => Results.Ok(c.Items["actor"]));
@@ -185,8 +228,8 @@ app.MapGet("/api/claims/page", (Store s, string? status, string? after, int? lim
     var rows = s.QueryClaims(state, after, size + 1);
     return Results.Ok(new { items = rows.Take(size), nextCursor = rows.Length > size ? rows[size - 1].Id.ToString() : null });
 });
-app.MapGet("/api/claims/{id:guid}", (Guid id, Store s) => s.Get(id)is { } x ? Results.Ok(x.Claim) : Results.NotFound());
-app.MapGet("/api/claims/{id:guid}/history", (Guid id, Store s) => s.Get(id)is { } x ? Results.Ok(x.History) : Results.NotFound());
+app.MapGet("/api/claims/{id:guid}", (Guid id, Store s) => s.Get(id) is { } x ? Results.Ok(x.Claim) : Results.NotFound());
+app.MapGet("/api/claims/{id:guid}/history", (Guid id, Store s) => s.Get(id) is { } x ? Results.Ok(x.History) : Results.NotFound());
 app.MapPost("/api/claims", (CreateClaim input, HttpContext c, Store s) =>
 {
     var result = s.Create(input, (Actor)c.Items["actor"]!, c.Request.Headers["Idempotency-Key"].ToString());

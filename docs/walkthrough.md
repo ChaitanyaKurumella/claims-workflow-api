@@ -25,4 +25,4 @@ Stop the API and worker, choose a new unused `Claims__DataPath`, and rerun the d
 - Why SQLite: a clear single-host transaction boundary, with explicit limits on multi-node writes.
 - Why an outbox: avoid losing a delivery event after committing a decision.
 - Why stable event keys: a failed acknowledgement does not prove that the receiver failed to commit.
-- What remains: hosted identity setup, telemetry export, sustained deployment tests and an isolated public sandbox.
+- What remains: hosted identity setup, telemetry export, sustained deployment tests and remote validation of the isolated public sandbox.

@@ -11,7 +11,7 @@ Independent portfolio project built with AI assistance and synthetic data. This 
 - [Three-minute walkthrough](docs/walkthrough.md)
 - [Zero-cost hosting readiness and limits](docs/free-hosting.md)
 
-A public interactive demo is not deployed yet. The local demo uses synthetic data and deliberately restricts role switching to loopback. The release is runnable locally without buying hosting.
+A public interactive demo is not deployed yet. The local demo uses synthetic data and restricts role switching to loopback by default. An opt-in public sandbox isolates each visitor, expires workspaces after 30 minutes and bounds resource use; remote deployment validation is pending. The release is runnable locally without buying hosting.
 
 ```mermaid
 flowchart LR
@@ -49,7 +49,7 @@ Open http://localhost:5081. Choose Reviewer, select `CLM-2026-0843`, record a ra
 | Operational recovery | SQLite online backup tool and restore test preserve claims, audit, outbox and event identity |
 | Measured behavior | Reproducible local read probe and real HTTP acknowledgement-gap exercise; raw results and limitations included |
 
-35 backend test cases and six frontend tests were verified locally. Angular production build and application publish were verified. Check the GitHub Actions run for the status of the published revision.
+38 backend test cases and six frontend tests were verified locally. Angular production build and application publish were verified. Check the GitHub Actions run for the status of the published revision.
 
 ## Verify
 

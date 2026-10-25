@@ -56,6 +56,11 @@
     <main>
       <section class="session" *ngIf="!actor || demo">
         <span *ngIf="demo">Demo workspace · Switch perspective</span>
+        <p *ngIf="demo">
+          Synthetic data only. Hosted workspaces reset after 30 minutes or a
+          restart. Free hosting may take about a minute to wake. Choose a role
+          to begin; use no personal information.
+        </p>
         <div class="role-switch" *ngIf="demo">
           <button
             *ngFor="let r of roles"

@@ -4,21 +4,25 @@ Budget: $0. Do not attach a payment method, start a paid trial, provision a paid
 
 ## Verified provider limits
 
-Render's [free-service documentation](https://render.com/docs/free), checked 2026-10-22, says free web services sleep after 15 minutes idle and take about a minute to wake. Files, including SQLite changes, disappear on restart, redeploy or sleep. Free Postgres expires after 30 days, so it is not a durable free solution for this portfolio.
+Render's [free-service documentation](https://render.com/docs/free), checked 2026-10-25, says free web services sleep after 15 minutes idle and take about a minute to wake. Files, including SQLite changes, disappear on restart, redeploy or sleep. Free Postgres expires after 30 days, so it is not a durable free solution for this portfolio.
 
 Render also states that without a payment method, bandwidth exhaustion suspends services and pipeline exhaustion disables builds rather than billing supplemental usage. Verify the actual workspace has no payment method and the service explicitly says Free before deployment. Do not rely on a Free service label alone if the workspace has billing attached.
 
-## Current blockers
+## Public sandbox deployment
 
-1. The Render dashboard requires the account owner to sign in directly.
-2. The application's demo role-session endpoint accepts only loopback clients. It must not be exposed by stripping that check or by putting a loopback proxy in front of it.
-3. The role-switching sandbox needs visitor isolation, bounded session/storage use and automatic expiry/reset. Sharing one mutable database lets visitors interfere with each other's walkthroughs.
-4. TLS termination needs a trusted-forwarded-header design and same-origin tests; the current origin comparison uses the backend request scheme.
+Implementation passes 38 backend tests and six frontend tests locally, and the frontend production build and application publish are verified. Publication, container build and remote validation remain pending.
 
-## Two supported directions
+In Render select Docker, branch `main`, **Free ($0/month)**, no disk and health check `/health`. Set:
 
-- Local live demo today: use the release and walkthrough. No hosting account, billing or public identity tenant is required.
-- Hosted application: the included Dockerfile builds the current application with demo mode off. It still requires a real OIDC authority/audience and deployment validation. This is a packaging starting point, not a ready public role-switching demo.
+- `Claims__PublicDemo=true`
+- `Claims__DemoMode=true`
+- `Claims__SeedDemo=false` (each workspace seeds itself)
+
+Do not configure API keys, OIDC or an external delivery URL in public demo mode; startup rejects these combinations. The Dockerfile remains demo-off by default. Free hosting may take about a minute to wake; this is disclosed in the demo workspace.
+
+Each browser cookie identifies an isolated SQLite workspace. Role changes preserve that workspace. Workspaces expire after 30 minutes (not sliding), reset to synthetic samples on the next role selection, and are swept every minute. Restart discards access to all sessions. Limits: 32 concurrent workspaces, 200 mutations per workspace, 16 KiB request bodies, one active sandbox request and a two-second queue wait. Capacity returns HTTP 429; expired sessions return 401 until a role is selected again. Operations advance on sandbox requests rather than an unattended background worker. This demo uses local simulated delivery only.
+
+Render is the TLS terminator. Public mode accepts the final forwarded scheme, with a one-hop limit, while preserving the original Host for origin checks. This setting requires deployment directly behind Render's ingress, with no alternate public backend port. Remote HTTPS checks remain required.
 
 ## Container configuration for an authenticated deployment
 
