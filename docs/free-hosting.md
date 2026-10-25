@@ -1,6 +1,6 @@
 # Zero-cost hosting readiness
 
-Budget: $0. Do not attach a payment method, start a paid trial, provision a paid disk/database, or upgrade compute. Stop if the provider requires billing details. No hosted service has been created by this preparation.
+Budget: $0. Do not attach a payment method, start a paid trial, provision a paid disk/database, or upgrade compute. Stop if the provider requires billing details. The public sandbox runs on Render Free at https://claims-workflow-api.onrender.com/.
 
 ## Verified provider limits
 
@@ -10,7 +10,7 @@ Render also states that without a payment method, bandwidth exhaustion suspends 
 
 ## Public sandbox deployment
 
-Implementation passes 38 backend tests and six frontend tests locally, and the frontend production build and application publish are verified. Publication, container build and remote validation remain pending.
+Implementation passes 38 backend tests and six frontend tests locally, and the frontend production build and application publish are verified. GitHub publication, CI, Render container build and initial HTTPS workflow/isolation checks passed on 2026-10-25. See [verification](public-demo-verification.md).
 
 In Render select Docker, branch `main`, **Free ($0/month)**, no disk and health check `/health`. Set:
 
@@ -39,4 +39,4 @@ The free filesystem is disposable: do not enter real claims or expect recovery a
 - Cold-start and data-loss notices are visible before visitors enter information.
 - The published URL passes the walkthrough and restart/reset exercise.
 
-No public demo URL should be added to the README until these checks pass.
+The initial public URL is published. Expiry and resource-limit tests use the local deterministic suite; sustained hosted load and a full 30-minute hosted expiry observation are not claimed.

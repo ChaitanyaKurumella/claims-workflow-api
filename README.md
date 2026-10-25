@@ -11,7 +11,7 @@ Independent portfolio project built with AI assistance and synthetic data. This 
 - [Three-minute walkthrough](docs/walkthrough.md)
 - [Zero-cost hosting readiness and limits](docs/free-hosting.md)
 
-A public interactive demo is not deployed yet. The local demo uses synthetic data and restricts role switching to loopback by default. An opt-in public sandbox isolates each visitor, expires workspaces after 30 minutes and bounds resource use; remote deployment validation is pending. The release is runnable locally without buying hosting.
+[Open the live interactive demo](https://claims-workflow-api.onrender.com/). Choose Reviewer to start an isolated synthetic workspace, then switch to Supervisor for independent approval. Workspaces expire after 30 minutes and reset on restart. Free hosting can take about a minute to wake. Use synthetic data only. See [deployment verification](docs/public-demo-verification.md) for tested behavior and limits.
 
 ```mermaid
 flowchart LR
