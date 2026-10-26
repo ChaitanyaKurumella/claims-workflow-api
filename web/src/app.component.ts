@@ -133,6 +133,12 @@ export class AppComponent implements OnInit {
       if (e instanceof ApiError && e.status === 401) {
         this.actor = "";
         this.role = "";
+        this.claims = [];
+        this.nextCursor = null;
+        this.clearSelection();
+        this.ops = null;
+        this.showCreate = false;
+        this.view = "workspace";
       }
       throw e;
     }
@@ -163,16 +169,30 @@ export class AppComponent implements OnInit {
       this.nextCursor = page.nextCursor;
     });
   }
+  clearSelection() {
+    this.selected = null;
+    this.events = [];
+    this.note = "";
+  }
   async refresh() {
+    const selectedId = this.selected?.id;
+    this.clearSelection();
     const page = await this.api<ClaimPage>("/api/claims/page");
     this.claims = page.items;
     this.nextCursor = page.nextCursor;
-    if (this.selected) {
-      this.selected = await this.api<Claim>("/api/claims/" + this.selected.id);
-      if (this.selected)
-        this.events = await this.api(
-          "/api/claims/" + this.selected.id + "/history",
+    if (selectedId) {
+      try {
+        const claim = await this.api<Claim>("/api/claims/" + selectedId);
+        const events = await this.api<Audit[]>(
+          "/api/claims/" + selectedId + "/history",
         );
+        this.selected = claim;
+        this.events = events;
+      } catch (e) {
+        if (!(e instanceof ApiError) || e.status !== 404) throw e;
+        this.message =
+          "This claim is no longer available. Select a claim from the refreshed register.";
+      }
     }
   }
   refreshAll() {
@@ -223,9 +243,13 @@ export class AppComponent implements OnInit {
   }
   select(c: Claim) {
     return this.run(async () => {
-      this.selected = await this.api("/api/claims/" + c.id);
-      this.events = await this.api("/api/claims/" + c.id + "/history");
-      this.note = "";
+      this.clearSelection();
+      const claim = await this.api<Claim>("/api/claims/" + c.id);
+      const events = await this.api<Audit[]>(
+        "/api/claims/" + c.id + "/history",
+      );
+      this.selected = claim;
+      this.events = events;
     });
   }
   act(action: string) {

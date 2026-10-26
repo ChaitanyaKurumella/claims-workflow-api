@@ -12,6 +12,14 @@ Use synthetic information only. Open [the public sandbox](https://claims-workflo
 
 For a fresh scenario, use a new synthetic claim rather than trying to edit an immutable final decision. Rehearse once before recording. The seeded claim CLM-2026-0843 may already be final in an existing database.
 
+## Screenshots
+
+[Reviewer workspace](screenshots/workspace.png) · [Claim detail and audit trail](screenshots/claim-detail.png) · [Integration monitor](screenshots/integration-monitor.png)
+
+## Reconnect after a reset
+
+If a session expires or the host restarts, click Refresh. The app removes the previous workspace data and asks you to choose a demo role. Choose Reviewer to receive a fresh workspace. If a selected claim no longer exists, its detail and history are dismissed; select a claim from the refreshed register.
+
 ## Optional recovery segment
 
 Follow [operations](operations.md) to run the loopback receiver with `--fail-first 1`. Show two attempts and one durable receiver receipt. The normal local integration sink is not evidence of external HTTP recovery; use the receiver exercise or the checked-in HTTP evidence.

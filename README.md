@@ -13,6 +13,20 @@ Independent portfolio project built with AI assistance and synthetic data. This 
 
 [Open the live interactive demo](https://claims-workflow-api.onrender.com/). Choose Reviewer to start an isolated synthetic workspace, then switch to Supervisor for independent approval. Workspaces expire after 30 minutes and reset on restart. Free hosting can take about a minute to wake. Use synthetic data only. See [deployment verification](docs/public-demo-verification.md) for tested behavior and limits.
 
+## See the workflow
+
+![Reviewer workspace with claim register and workflow totals](docs/screenshots/workspace.png)
+
+1. Choose **Reviewer**, open `CLM-2026-0843` ($12,600), enter a rationale, and request supervisor sign-off.
+2. Switch to **Supervisor**, review the claim and audit trail, enter an independent rationale, and approve.
+3. Open **Integration monitor** to inspect the outbox delivery record. See the [three-minute walkthrough](docs/walkthrough.md) for details.
+
+![Claim detail with versioned actions and audit history](docs/screenshots/claim-detail.png)
+
+![Supervisor integration monitor](docs/screenshots/integration-monitor.png)
+
+Screenshots show the local synthetic demo. Visitor workspaces expire after 30 minutes or reset on restart; reconnect with a demo role to begin again. Expired sessions clear the register, selected claim and audit history. A missing selected claim is dismissed while the refreshed register remains available.
+
 ```mermaid
 flowchart LR
   UI[Angular workspace] --> API[ASP.NET Core API]
@@ -49,7 +63,7 @@ Open http://localhost:5081. Choose Reviewer, select `CLM-2026-0843`, record a ra
 | Operational recovery | SQLite online backup tool and restore test preserve claims, audit, outbox and event identity |
 | Measured behavior | Reproducible local read probe and real HTTP acknowledgement-gap exercise; raw results and limitations included |
 
-38 backend test cases and six frontend tests were verified locally. Angular production build and application publish were verified. Check the GitHub Actions run for the status of the published revision.
+38 backend test cases and nine frontend tests were verified locally. Angular production build and application publish were verified. Check the GitHub Actions run for the status of the published revision.
 
 ## Verify
 
@@ -58,7 +72,7 @@ dotnet test tests/Claims.Tests/Claims.Tests.csproj --configuration Release
 (cd web && npm ci && npm test && npm run build)
 ```
 
-CI runs both suites, builds the frontend and packages the application. The frontend tests exercise display authorization and HTTP transport; they are not a substitute for a full browser regression suite.
+CI runs both suites, builds the frontend and packages the application. The frontend tests exercise display authorization, HTTP transport and stale-session recovery; they are not a substitute for a full browser regression suite.
 
 ## API
 
