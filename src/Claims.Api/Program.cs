@@ -98,7 +98,7 @@ if (publicDemo)
         ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto,
         ForwardLimit = 1
     };
-    forwarded.KnownNetworks.Clear();
+    forwarded.KnownIPNetworks.Clear();
     forwarded.KnownProxies.Clear();
     app.UseForwardedHeaders(forwarded);
     app.Use(async (HttpContext context, RequestDelegate next) =>

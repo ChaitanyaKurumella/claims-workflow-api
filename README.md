@@ -1,6 +1,6 @@
 # ClaimDesk — claims workflow and delivery
 
-ASP.NET Core 8, Angular 20 and SQLite. A claims operations application demonstrating independent approval, transactional audit/outbox writes, schema evolution, personal token identities and recoverable HTTP delivery.
+ASP.NET Core 10, Angular 20 and SQLite. A claims operations application demonstrating independent approval, transactional audit/outbox writes, schema evolution, personal token identities and recoverable HTTP delivery.
 
 Independent portfolio project built with AI assistance and synthetic data. This repository shows implementation and reproducible evidence; it does not claim employer ownership, production usage or production scale.
 
@@ -41,7 +41,7 @@ The claim change, audit record and outbox event commit in one transaction. HTTP 
 
 ## Run locally
 
-Requires .NET 8 SDK, Node.js 22.12+, npm, Python 3 for operational exercises, and OpenSSL for generated demo keys.
+Requires .NET 10 SDK, Node.js 22.12+, npm, Python 3 for operational exercises, and OpenSSL for generated demo keys.
 
 ```sh
 bash scripts/run-demo.sh

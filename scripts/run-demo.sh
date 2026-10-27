@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-command -v dotnet >/dev/null || { echo 'Install .NET 8 SDK first.'; exit 1; }
+command -v dotnet >/dev/null || { echo 'Install .NET 10 SDK first.'; exit 1; }
 command -v npm >/dev/null || { echo 'Install Node.js 22.12+ first.'; exit 1; }
 (cd web && npm ci && npm run build)
 mkdir -p src/Claims.Api/wwwroot

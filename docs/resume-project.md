@@ -1,6 +1,6 @@
 # Résumé project entry
 
-**ClaimDesk — ASP.NET Core 8, Angular 20, SQLite**
+**ClaimDesk — ASP.NET Core 10, Angular 20, SQLite**
 
 [GitHub](https://github.com/ChaitanyaKurumella/claims-workflow-api) · [Live demo](https://claims-workflow-api.onrender.com/)
 
