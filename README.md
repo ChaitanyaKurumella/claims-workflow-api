@@ -61,10 +61,11 @@ Open http://localhost:5081. Choose Reviewer, select `CLM-2026-0843`, record a ra
 | Personal identities | Standard JWT bearer validation against OIDC authority/audience; role mapping fails closed; issuer, audience, expiry and signature tests |
 | Browser regression | Real API and production Angular bundle; independent sessions, stale-version conflicts, recovery, HTML reports and failure traces in CI |
 | Frontend boundaries | Typed API transport and models, case workspace and integration monitor components, separate templates, policy and transport tests |
+| Request diagnostics | W3C trace correlation, response/problem IDs, final-status completion logs and bounded route metrics; [triage guide](docs/request-observability.md) |
 | Operational recovery | SQLite online backup tool and restore test preserve claims, audit, outbox and event identity |
 | Measured behavior | Reproducible local read probe and real HTTP acknowledgement-gap exercise; raw results and limitations included |
 
-40 backend test cases, nine frontend unit tests and six browser workflow scenarios were verified locally. Angular production build and application publish were verified. Check the GitHub Actions run for the status of the published revision.
+48 backend test cases and six browser workflow scenarios were verified locally for request diagnostics. Nine frontend unit tests are also included. Angular production build and application publish were verified for the browser-suite release. Check the GitHub Actions run for the status of the published revision.
 
 ## Verify
 

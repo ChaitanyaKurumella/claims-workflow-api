@@ -4,11 +4,15 @@ using Claims.Api;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
-using System.Diagnostics.Metrics;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddSingleton<RequestTelemetry>();
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
-builder.Services.AddProblemDetails();
+builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
+{
+    context.ProblemDetails.Extensions["requestId"] = context.HttpContext.TraceIdentifier;
+    context.ProblemDetails.Extensions["traceId"] = RequestTelemetry.GetTraceId(context.HttpContext);
+});
 var publicDemo = builder.Configuration.GetValue<bool>("Claims:PublicDemo");
 var demo = builder.Configuration.GetValue<bool>("Claims:DemoMode");
 if (publicDemo) builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 16384);
@@ -86,9 +90,7 @@ if (authority is not null && (demo || identities.Count > 0))
 var app = builder.Build();
 if (!publicDemo && demo && builder.Configuration.GetValue<bool>("Claims:SeedDemo"))
     DemoData.Seed(app.Services.GetRequiredService<Store>());
-using var meter = new Meter("Claims.Operations", "2.0.0");
-var requests = meter.CreateCounter<long>("claims.http.requests");
-var duration = meter.CreateHistogram<double>("claims.http.duration", "ms");
+app.UseMiddleware<RequestTelemetry>();
 app.UseExceptionHandler();
 // Render terminates TLS. Trust only the scheme, never forwarded host or client identity.
 if (publicDemo)
@@ -118,70 +120,58 @@ if (authority is not null)
 app.Use(async (context, next) =>
 {
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
-    context.Response.Headers["X-Request-Id"] = context.TraceIdentifier;
-    var started = System.Diagnostics.Stopwatch.GetTimestamp();
-    try
+    if (context.Request.Path.StartsWithSegments("/api"))
     {
-        if (context.Request.Path.StartsWithSegments("/api"))
+        context.Response.Headers.CacheControl = "no-store";
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(context.Request.Headers["X-Api-Key"].ToString()));
+        var actor = identities.FirstOrDefault(x => CryptographicOperations.FixedTimeEquals(x.Hash, hash)).Actor;
+        if (authority is not null && context.User.Identity?.IsAuthenticated == true)
         {
-            context.Response.Headers.CacheControl = "no-store";
-            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(context.Request.Headers["X-Api-Key"].ToString()));
-            var actor = identities.FirstOrDefault(x => CryptographicOperations.FixedTimeEquals(x.Hash, hash)).Actor;
-            if (authority is not null && context.User.Identity?.IsAuthenticated == true)
-            {
-                var subject = context.User.FindFirst("sub")?.Value;
-                var roles = context.User.FindAll("roles").Select(x => x.Value).Where(x => x is "Reviewer" or "Supervisor" or "Administrator").Distinct().ToArray();
-                // Ambiguous role mappings fail closed. Subject comes only from a validated token.
-                if (!string.IsNullOrWhiteSpace(subject) && roles.Length == 1)
-                    actor = new(subject, roles[0]);
-                else
-                {
-                    context.Response.StatusCode = 403;
-                    return;
-                }
-            }
-
-            if (actor is null && demo && context.Request.Cookies["claims-demo"] is { } token)
-            {
-                if (publicDemo && context.Items["demo-workspace"] is DemoWorkspace workspace)
-                    actor = new(workspace.Role.ToLowerInvariant() + "-01", workspace.Role);
-                else demoSessions.TryGetValue(token, out actor);
-            }
-            if (actor is null)
-            {
-                context.Response.StatusCode = 401;
-                return;
-            }
-
-            if (context.Request.Method != "GET" && context.Request.Headers.Origin is { Count: > 0 } origin && origin.ToString() != $"{context.Request.Scheme}://{context.Request.Host}")
-            {
-                context.Response.StatusCode = 403;
-                return;
-            }
-
-            context.Items["actor"] = actor;
-            if (context.Request.Path.StartsWithSegments("/api/operations") && actor.Role == "Reviewer")
+            var subject = context.User.FindFirst("sub")?.Value;
+            var roles = context.User.FindAll("roles").Select(x => x.Value).Where(x => x is "Reviewer" or "Supervisor" or "Administrator").Distinct().ToArray();
+            // Ambiguous role mappings fail closed. Subject comes only from a validated token.
+            if (!string.IsNullOrWhiteSpace(subject) && roles.Length == 1)
+                actor = new(subject, roles[0]);
+            else
             {
                 context.Response.StatusCode = 403;
                 return;
             }
         }
 
-        try
+        if (actor is null && demo && context.Request.Cookies["claims-demo"] is { } token)
         {
-            await next();
+            if (publicDemo && context.Items["demo-workspace"] is DemoWorkspace workspace)
+                actor = new(workspace.Role.ToLowerInvariant() + "-01", workspace.Role);
+            else demoSessions.TryGetValue(token, out actor);
         }
-        catch (RuleException e)
+        if (actor is null)
         {
-            await Results.Problem(e.Message, statusCode: e.Status, extensions: new Dictionary<string, object?> { { "requestId", context.TraceIdentifier } }).ExecuteAsync(context);
+            context.Response.StatusCode = 401;
+            return;
+        }
+
+        if (context.Request.Method != "GET" && context.Request.Headers.Origin is { Count: > 0 } origin && origin.ToString() != $"{context.Request.Scheme}://{context.Request.Host}")
+        {
+            context.Response.StatusCode = 403;
+            return;
+        }
+
+        context.Items["actor"] = actor;
+        if (context.Request.Path.StartsWithSegments("/api/operations") && actor.Role == "Reviewer")
+        {
+            context.Response.StatusCode = 403;
+            return;
         }
     }
-    finally
+
+    try
     {
-        var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-        requests.Add(1, new KeyValuePair<string, object?>("status", context.Response.StatusCode));
-        duration.Record(elapsed);
-        app.Logger.LogInformation("Request {RequestId} {Method} {Path} returned {Status} in {ElapsedMs}ms", context.TraceIdentifier, context.Request.Method, context.Request.Path, context.Response.StatusCode, elapsed);
+        await next();
+    }
+    catch (RuleException e)
+    {
+        await Results.Problem(e.Message, statusCode: e.Status, extensions: new Dictionary<string, object?> { { "requestId", context.TraceIdentifier } }).ExecuteAsync(context);
     }
 });
 app.UseDefaultFiles();
