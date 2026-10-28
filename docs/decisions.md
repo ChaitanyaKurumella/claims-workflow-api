@@ -23,3 +23,7 @@ Use ASP.NET JWT bearer validation with OIDC discovery rather than custom token c
 ## 006 — Evidence has a scope
 
 Keep executable correctness/recovery tests and raw measured results alongside the claims they support. A sub-second local read probe does not establish sustained production throughput. Passing tests do not establish production readiness or years of experience. Keep limitations visible so reviewers can assess judgment as well as working code.
+
+## 007 — Test user workflows against the packaged application
+
+Use Playwright with the production Angular bundle and a real API process. Give each scenario an isolated server-side visitor workspace; use a second tab for stale-version conflicts and a separate browser context for tenant isolation. Keep rollback, leases, migrations and JWT edge cases in faster backend tests. Reject reuse of an existing server to avoid testing stale code. Retain HTML reports and failure traces in CI so failures can be reviewed. Tradeoff: browser installation and process startup increase CI cost; Chromium-only checks do not establish cross-browser coverage. Cookie loss is tested without waiting 30 minutes, while time-driven server expiry remains a backend responsibility.

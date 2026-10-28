@@ -5,8 +5,10 @@
   "scripts": {
     "build": "ng build",
     "test": "tsc --target ES2022 --module commonjs --strict --skipLibCheck --outDir .test-build src/models.ts src/workflow-view.ts src/api-client.ts && node --test tests/*.test.cjs",
-    "format": "prettier --write \"src/**/*.{ts,html}\" \"tests/*.cjs\"",
-    "format:check": "prettier --check \"src/**/*.{ts,html}\" \"tests/*.cjs\""
+    "format": "prettier --write \"src/**/*.{ts,html}\" \"tests/*.cjs\" \"e2e/*.ts\" \"playwright.config.ts\"",
+    "format:check": "prettier --check \"src/**/*.{ts,html}\" \"tests/*.cjs\" \"e2e/*.ts\" \"playwright.config.ts\"",
+    "test:e2e": "playwright test",
+    "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
     "@angular/common": "^20.3.0",
@@ -21,6 +23,7 @@
   "devDependencies": {
     "@angular/build": "^20.3.0",
     "@angular/cli": "^20.3.0",
+    "@playwright/test": "1.64.1",
     "prettier": "3.9.10",
     "typescript": "~5.9.2"
   },

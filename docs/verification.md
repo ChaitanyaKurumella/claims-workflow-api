@@ -1,5 +1,9 @@
 # Verification record — 2026-10-21
 
+## Current browser regression update — 2026-10-27
+
+The [browser regression guide](browser-tests.md) records six real-API browser scenarios, 40 backend tests, nine frontend unit tests, production Angular compilation and formatting checks verified locally. The original measurements below retain their original date and scope. GitHub CI results must be checked on the published revision.
+
 ## Automated checks
 
 - 35 backend cases pass in Release mode: HTTP validation and roles, workflow correctness, independent approval, transaction rollback, eight-store concurrency, idempotency, SLA, retries/dead letters, migration preservation/rollback/future-version rejection, online backup restoration, lease fencing/crash recovery, consumer deduplication and JWT issuer/audience/signature/expiry/role validation.
@@ -7,7 +11,7 @@
 - Angular production compilation validates component templates and strict TypeScript models.
 - API Release publish succeeds.
 
-JWT tests use signed local fixtures and static discovery configuration. They do not demonstrate a connection to a real OIDC tenant. Frontend tests exercise policy and transport rather than rendered browser components.
+JWT tests use signed local fixtures and static discovery configuration. They do not demonstrate a connection to a real OIDC tenant. Those original frontend tests exercise policy and transport; the later Playwright suite also verifies rendered browser workflows.
 
 ## Real HTTP acknowledgement gap
 
@@ -31,4 +35,4 @@ The migration test creates a version-1 database containing an existing claim plu
 
 ## Boundaries
 
-No production traffic, provider tenant, deployment SLO, sustained mixed workload, telemetry collector, full browser regression suite or disaster-recovery timing has been verified. GitHub CI status belongs to the exact published commit; consult its Actions run. The work does not imply production certification.
+No production traffic, provider tenant, deployment SLO, sustained mixed workload, telemetry collector, cross-browser regression matrix or disaster-recovery timing has been verified. GitHub CI status belongs to the exact published commit; consult its Actions run. The work does not imply production certification.

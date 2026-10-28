@@ -12,3 +12,6 @@ web/.test-build/
 artifacts/
 *.db
 *.db-*
+
+web/playwright-report/
+web/test-results/

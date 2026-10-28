@@ -59,11 +59,12 @@ Open http://localhost:5081. Choose Reviewer, select `CLM-2026-0843`, record a ra
 | Bounded work | Keyset pages, status/id index, indexed SLA batches of 100; query plans retained in `docs/evidence` |
 | Delivery failure | Separate outbox persistence and HTTP adapter; 30s leases, fencing tokens, stable event keys, bounded retries, dead letters and recovery |
 | Personal identities | Standard JWT bearer validation against OIDC authority/audience; role mapping fails closed; issuer, audience, expiry and signature tests |
+| Browser regression | Real API and production Angular bundle; independent sessions, stale-version conflicts, recovery, HTML reports and failure traces in CI |
 | Frontend boundaries | Typed API transport and models, case workspace and integration monitor components, separate templates, policy and transport tests |
 | Operational recovery | SQLite online backup tool and restore test preserve claims, audit, outbox and event identity |
 | Measured behavior | Reproducible local read probe and real HTTP acknowledgement-gap exercise; raw results and limitations included |
 
-38 backend test cases and nine frontend tests were verified locally. Angular production build and application publish were verified. Check the GitHub Actions run for the status of the published revision.
+40 backend test cases, nine frontend unit tests and six browser workflow scenarios were verified locally. Angular production build and application publish were verified. Check the GitHub Actions run for the status of the published revision.
 
 ## Verify
 
@@ -72,7 +73,7 @@ dotnet test tests/Claims.Tests/Claims.Tests.csproj --configuration Release
 (cd web && npm ci && npm test && npm run build)
 ```
 
-CI runs both suites, builds the frontend and packages the application. The frontend tests exercise display authorization, HTTP transport and stale-session recovery; they are not a substitute for a full browser regression suite.
+CI runs backend and frontend unit tests, builds and packages the application, then starts the real API for six Playwright browser scenarios. These cover independent approval, API role enforcement, visitor isolation, delivery recovery, session loss and conflicting decisions in two tabs. HTML reports and failure traces are retained for 14 days. See the [browser test guide](docs/browser-tests.md) for local commands, coverage and limits.
 
 ## API
 
