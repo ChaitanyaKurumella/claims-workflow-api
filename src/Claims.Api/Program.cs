@@ -242,7 +242,12 @@ app.MapGet("/api/operations", (Store s) =>
     var summary = s.Summary();
     var events = s.Outbox();
     var deliveries = s.DeliveryCounts();
-    return Results.Ok(new { summary, deliveryMode = builder.Configuration["Claims:DeliveryUrl"] is { Length: > 0 } ? "HTTP" : "Local", pendingEvents = deliveries.Pending, deadLetters = deliveries.DeadLetters, events });
+    return Results.Ok(new { summary, demoAvailable = publicDemo, deliveryMode = builder.Configuration["Claims:DeliveryUrl"] is { Length: > 0 } ? "HTTP" : "Local", pendingEvents = deliveries.Pending, deadLetters = deliveries.DeadLetters, events });
+});
+app.MapPost("/api/operations/demo-failure", (HttpContext c, Store s) =>
+{
+    if (!publicDemo || c.Items["demo-workspace"] is not DemoWorkspace) return Results.NotFound();
+    return Results.Ok(new { eventId = s.Deliveries.SimulateFailure() });
 });
 app.MapPost("/api/operations/outbox/{id:long}/retry", (long id, Store s) =>
 {

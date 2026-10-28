@@ -304,6 +304,7 @@
         [ops]="ops"
         [busy]="busy"
         (retry)="retry($event)"
+        (simulate)="simulateFailure()"
       ></integration-monitor
       ><ng-container *ngIf="view === 'architecture'"
         ><div class="heading">

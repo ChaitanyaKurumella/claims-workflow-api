@@ -31,6 +31,7 @@ export interface OutboxEvent {
   lastError: string | null;
 }
 export interface Operations {
+  demoAvailable: boolean;
   deliveryMode: string;
   summary: { total: number; exposure: number; overdue: number };
   pendingEvents: number;

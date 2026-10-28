@@ -28,6 +28,41 @@ public sealed class PublicDemoTests
         return c;
     }
     [Fact]
+    public async Task Failure_simulation_is_unavailable_outside_public_demo()
+    {
+        await using var app = new TestApp();
+        using var client = app.CreateClient();
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/api/operations/demo-failure", null)).StatusCode);
+    }
+    [Fact]
+    public async Task Failure_demo_is_role_gated_isolated_and_retry_delivers()
+    {
+        var clock = new Clock();
+        await using var app = new App(clock);
+        using var a = Client(app);
+        using var b = Client(app);
+        (await a.PostAsync("/demo/session/Reviewer", null)).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Forbidden, (await a.PostAsync("/api/operations/demo-failure", null)).StatusCode);
+        (await a.PostAsync("/demo/session/Supervisor", null)).EnsureSuccessStatusCode();
+        (await b.PostAsync("/demo/session/Supervisor", null)).EnsureSuccessStatusCode();
+        var result = await a.PostAsync("/api/operations/demo-failure", null);
+        result.EnsureSuccessStatusCode();
+        var data = await result.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var id = data.GetProperty("eventId").GetInt64();
+        var ops = await a.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/operations");
+        var failed = ops.GetProperty("events").EnumerateArray().Single(e => e.GetProperty("id").GetInt64() == id);
+        Assert.Equal("DeadLetter", failed.GetProperty("status").GetString());
+        Assert.Equal(5, failed.GetProperty("attempts").GetInt32());
+        Assert.DoesNotContain("DeliveryDemo", await b.GetStringAsync("/api/operations"));
+        (await a.PostAsync($"/api/operations/outbox/{id}/retry", null)).EnsureSuccessStatusCode();
+        clock.Now = clock.Now.AddSeconds(1);
+        ops = await a.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/operations");
+        var delivered = ops.GetProperty("events").EnumerateArray().Single(e => e.GetProperty("id").GetInt64() == id);
+        Assert.Equal("Delivered", delivered.GetProperty("status").GetString());
+        Assert.Equal(1, delivered.GetProperty("attempts").GetInt32());
+        Assert.Equal(HttpStatusCode.Conflict, (await a.PostAsync($"/api/operations/outbox/{id}/retry", null)).StatusCode);
+    }
+    [Fact]
     public async Task Visitors_are_isolated_roles_preserve_workspace_and_expiry_resets_data()
     {
         var clock = new Clock();

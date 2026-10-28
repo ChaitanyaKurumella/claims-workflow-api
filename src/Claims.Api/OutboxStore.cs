@@ -33,14 +33,14 @@ public sealed class OutboxStore
     }
 
     // The local integration sink deduplicates by event ID. External consumers need the same guarantee.
-    public bool DispatchOne(DateTimeOffset now, bool simulateFailure = false)
+    public bool DispatchOne(DateTimeOffset now, bool simulateFailure = false, long? eventId = null)
     {
         using var db = Open();
         using var tx = db.BeginTransaction();
         long id;
         int attempts;
         string payload;
-        using (var c = Cmd(db, tx, "SELECT id,attempts,payload FROM outbox WHERE status='Pending' AND next_attempt <= $p0 ORDER BY id LIMIT 1", now.ToString("O")))
+        using (var c = Cmd(db, tx, "SELECT id,attempts,payload FROM outbox WHERE status='Pending' AND next_attempt <= $p0 AND ($p1 IS NULL OR id=$p1) ORDER BY id LIMIT 1", now.ToString("O"), eventId))
         using (var r = c.ExecuteReader())
         {
             if (!r.Read())
@@ -60,6 +60,25 @@ public sealed class OutboxStore
 
         tx.Commit();
         return true;
+    }
+
+    // Accelerated, workspace-local demonstration; never contacts an external sink.
+    public long SimulateFailure()
+    {
+        long id;
+        using (var db = Open())
+        using (var tx = db.BeginTransaction())
+        {
+            using var claim = Cmd(db, tx, "SELECT id FROM claims ORDER BY id LIMIT 1");
+            var claimId = claim.ExecuteScalar() ?? throw new RuleException(409, "Create a claim first.");
+            Exec(db, tx, "INSERT INTO outbox(claim_id,type,payload,next_attempt) VALUES($p0,'DeliveryDemo',$p1,$p2)", claimId, "{\"demo\":true,\"message\":\"Synthetic downstream outage; accelerated retries\"}", DateTimeOffset.UtcNow.ToString("O"));
+            using var key = Cmd(db, tx, "SELECT last_insert_rowid()");
+            id = (long)key.ExecuteScalar()!;
+            tx.Commit();
+        }
+        var now = DateTimeOffset.UtcNow;
+        for (var attempt = 0; attempt < 5; attempt++) DispatchOne(now.AddMinutes(attempt), true, id);
+        return id;
     }
 
     public DeliveryLease? Lease(DateTimeOffset now)

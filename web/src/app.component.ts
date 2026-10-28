@@ -273,6 +273,14 @@ export class AppComponent implements OnInit {
       this.ops = await this.api("/api/operations");
     });
   }
+  simulateFailure() {
+    return this.run(async () => {
+      await this.api("/api/operations/demo-failure", {});
+      this.ops = await this.api("/api/operations");
+      this.message =
+        "Synthetic event failed five accelerated attempts. Select it to inspect the error, then retry delivery.";
+    });
+  }
   retry(id: number) {
     return this.run(async () => {
       await this.api("/api/operations/outbox/" + id + "/retry", {});

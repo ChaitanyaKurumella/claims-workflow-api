@@ -11,7 +11,11 @@
   <div class="metrics" *ngIf="ops">
     <article>
       <span>PENDING DELIVERY</span><strong>{{ ops.pendingEvents }}</strong
-      ><small>Worker polls every five seconds</small>
+      ><small>{{
+        ops.demoAvailable
+          ? "Demo delivery advances on refresh"
+          : "Worker polls every five seconds"
+      }}</small>
     </article>
     <article>
       <span>DEAD LETTERS</span><strong>{{ ops.deadLetters }}</strong
@@ -27,10 +31,42 @@
       ><small>Consumer must deduplicate event keys</small>
     </article>
   </div>
+  <section class="panel" *ngIf="ops?.demoAvailable">
+    <div class="section-title">
+      <h2>Try a delivery failure</h2>
+      <button (click)="simulate.emit()" [disabled]="busy">
+        Simulate downstream failure
+      </button>
+    </div>
+    <p>
+      Creates one synthetic event in your workspace and accelerates five failed
+      attempts into a dead letter. Inspect the error, then retry to deliver it
+      to the local sink. Other visitors are unaffected.
+    </p>
+  </section>
   <section class="panel">
     <div class="section-title">
       <h2>Delivery ledger</h2>
       <span>Latest 200 events</span>
+    </div>
+    <div class="monitor-filters">
+      <label
+        >Delivery state
+        <select [(ngModel)]="status">
+          <option>All</option>
+          <option>Pending</option>
+          <option>Sending</option>
+          <option>Delivered</option>
+          <option>DeadLetter</option>
+        </select></label
+      >
+      <label
+        >Search events
+        <input
+          [(ngModel)]="search"
+          placeholder="Event, claim ID, type or error"
+      /></label>
+      <span>{{ filteredEvents.length }} matching events</span>
     </div>
     <div class="table-wrap">
       <table>
@@ -45,8 +81,10 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let e of ops?.events">
-            <td>#{{ e.id }}</td>
+          <tr *ngFor="let e of filteredEvents">
+            <td>
+              <button (click)="selectedId = e.id">Event #{{ e.id }}</button>
+            </td>
             <td>{{ label(e.type) }}</td>
             <td>
               <span class="badge" [attr.data-status]="e.status">{{
@@ -69,8 +107,31 @@
               </button>
             </td>
           </tr>
+          <tr *ngIf="!filteredEvents.length">
+            <td colspan="6">No events match these filters.</td>
+          </tr>
         </tbody>
       </table>
     </div>
+  </section>
+  <section class="panel" *ngIf="selected as e">
+    <div class="section-title">
+      <h2>Event #{{ e.id }} details</h2>
+      <button (click)="selectedId = null">Close details</button>
+    </div>
+    <p>Claim: {{ e.claimId }}</p>
+    <p>
+      State: {{ e.status }} · Attempts in current cycle: {{ e.attempts }} / 5
+    </p>
+    <p *ngIf="e.lastError">Last delivery error: {{ e.lastError }}</p>
+    <p *ngIf="e.status === 'Pending'">
+      Next attempt: {{ e.nextAttempt | date: "medium" }}
+    </p>
+    <p>
+      Delivery uses a stable event key so the consumer can deduplicate retries.
+      Retry starts a new attempt cycle.
+    </p>
+    <h3>Event payload</h3>
+    <pre class="event-payload">{{ pretty(e.payload) }}</pre>
   </section></ng-container
 >
