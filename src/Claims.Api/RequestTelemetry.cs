@@ -38,6 +38,8 @@ public sealed class RequestTelemetry : IMiddleware, IDisposable
             ["RequestId"] = context.TraceIdentifier,
             ["TraceId"] = traceId
         });
+        using var activity = OperationsTelemetry.Activities.StartActivity("claims.request", ActivityKind.Internal);
+        activity?.SetTag("claims.request.trace_id", traceId);
         var started = Stopwatch.GetTimestamp();
         var failed = false;
         try
@@ -58,6 +60,10 @@ public sealed class RequestTelemetry : IMiddleware, IDisposable
             var method = context.Request.Method is "GET" or "POST" or "PUT" or "PATCH" or "DELETE" or "HEAD" or "OPTIONS"
                 ? context.Request.Method : "OTHER";
             var tags = new TagList { { "http.request.method", method }, { "http.route", route }, { "http.response.status_code", status } };
+            activity?.SetTag("http.request.method", method);
+            activity?.SetTag("http.route", route);
+            activity?.SetTag("http.response.status_code", status);
+            if (status >= 500) activity?.SetStatus(ActivityStatusCode.Error);
             requests.Add(1, tags);
             duration.Record(elapsed, tags);
             logger.LogInformation("Request {RequestId} trace {TraceId} {Method} {Route} returned {Status} in {ElapsedMs}ms",

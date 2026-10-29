@@ -44,9 +44,13 @@ For structured local console output, set `Logging__Console__FormatterName=json` 
 5. Check `/health` for readiness. Public demo health does not validate every visitor's ephemeral database; inspect workspace-specific errors separately.
 6. Verify recovery using a new request and the monitor's delivered state. Record evidence and the remaining uncertainty.
 
+## Optional export
+
+[OTLP export and local dashboard guide](telemetry-dashboard.md) documents the opt-in exporter and delivery instruments.
+
 ## Deployment work still required
 
-This change provides correlation, structured completion logs and in-process instruments. It does not provision an OpenTelemetry collector, trace storage, dashboards, alerts, retention policies or measured service objectives. HTTP delivery already uses .NET HttpClient instrumentation when a listener is installed; this change does not propagate a durable trace through persisted outbox events. Request IDs, event IDs and audit history remain separate evidence sources.
+The default deployment provides correlation, structured completion logs and in-process instruments. Opt-in OTLP export is available; it does not provision an OpenTelemetry collector, trace storage, dashboards, alerts, retention policies or measured service objectives. HTTP delivery already uses .NET HttpClient instrumentation when a listener is installed; this change does not propagate a durable trace through persisted outbox events. Request IDs, event IDs and audit history remain separate evidence sources.
 
 Before claiming operational readiness, provision telemetry export with reviewed redaction and retention, run controlled failure exercises, and collect a baseline. Candidate objectives are API success ratio and p95 latency over a defined route set, plus oldest pending event age and dead-letter count. Define exclusions, traffic volume, thresholds and time windows from measured behavior; these are proposed indicators, not achieved SLOs.
 

@@ -126,6 +126,51 @@ public sealed class ReliabilityTests : IDisposable
         Assert.EndsWith(":" + e.Id, handler.Key);
     }
 
+    sealed class DiagnosticReceiver(string outcome, Store store) : IEventDelivery
+    {
+        public Task Deliver(DeliveryLease lease, CancellationToken ct)
+        {
+            if (outcome == "failed") throw new HttpRequestException("sensitive receiver detail");
+            if (outcome == "cancelled") throw new OperationCanceledException(ct);
+            if (outcome == "lease_rejected")
+                store.Complete(lease, DateTimeOffset.UtcNow, null);
+            return Task.CompletedTask;
+        }
+    }
+
+    [Theory]
+    [InlineData("delivered")]
+    [InlineData("failed")]
+    [InlineData("lease_rejected")]
+    [InlineData("cancelled")]
+    public async Task Delivery_spans_report_outcome_without_payload_or_error_details(string outcome)
+    {
+        using var parent = new System.Diagnostics.Activity("test").Start();
+        System.Diagnostics.Activity? observed = null;
+        using var listener = new System.Diagnostics.ActivityListener
+        {
+            ShouldListenTo = source => source.Name == OperationsTelemetry.Name,
+            Sample = (ref System.Diagnostics.ActivityCreationOptions<System.Diagnostics.ActivityContext> _) => System.Diagnostics.ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity =>
+            {
+                if (activity.TraceId == parent.TraceId && activity.OperationName == "claims.delivery") observed = activity;
+            }
+        };
+        System.Diagnostics.ActivitySource.AddActivityListener(listener);
+        var store = Open();
+        Create(store, "PRIVATE-PAYLOAD");
+        var dispatcher = new OutboxDispatcher(store.Deliveries, new DiagnosticReceiver(outcome, store), NullLogger<OutboxDispatcher>.Instance);
+        using var cancellation = new CancellationTokenSource();
+        if (outcome == "cancelled") cancellation.Cancel();
+        if (outcome == "cancelled")
+            await Assert.ThrowsAsync<OperationCanceledException>(() => dispatcher.Dispatch(DateTimeOffset.UtcNow.AddSeconds(1), cancellation.Token));
+        else Assert.True(await dispatcher.Dispatch(DateTimeOffset.UtcNow.AddSeconds(1), cancellation.Token));
+        Assert.NotNull(observed);
+        Assert.Equal(outcome, observed.GetTagItem("outcome"));
+        Assert.Single(observed.TagObjects);
+        Assert.Equal(outcome is "failed" or "lease_rejected" ? System.Diagnostics.ActivityStatusCode.Error : System.Diagnostics.ActivityStatusCode.Unset, observed.Status);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(folder))

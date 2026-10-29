@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Diagnostics;
 using System.Text;
 
 namespace Claims.Api;
@@ -30,23 +31,40 @@ public sealed class OutboxDispatcher(OutboxStore store, IEventDelivery delivery,
         var lease = store.Lease(now);
         if (lease is null)
             return false;
-        string? error = null;
+        using var activity = OperationsTelemetry.Activities.StartActivity("claims.delivery", ActivityKind.Producer);
+        var started = Stopwatch.GetTimestamp();
+        var outcome = "failed";
         try
         {
-            await delivery.Deliver(lease, cancellationToken);
-        }
-        catch (OperationCanceledException)when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception e)
-        {
-            error = "Delivery failed (" + e.GetType().Name + ")";
-            logger.LogWarning("Event {EventKey} attempt {Attempt} failed: {ErrorType}", lease.EventKey, lease.Attempts, e.GetType().Name);
-        }
+            string? error = null;
+            try
+            {
+                await delivery.Deliver(lease, cancellationToken);
+            }
+            catch (OperationCanceledException)when (cancellationToken.IsCancellationRequested)
+            {
+                outcome = "cancelled";
+                throw;
+            }
+            catch (Exception e)
+            {
+                error = "Delivery failed (" + e.GetType().Name + ")";
+                logger.LogWarning("Event {EventKey} attempt {Attempt} failed: {ErrorType}", lease.EventKey, lease.Attempts, e.GetType().Name);
+            }
 
-        if (!store.Complete(lease, DateTimeOffset.UtcNow, error))
-            logger.LogWarning("Completion rejected for expired event lease {EventKey}", lease.EventKey);
-        return true;
+            if (!store.Complete(lease, DateTimeOffset.UtcNow, error))
+            {
+                outcome = "lease_rejected";
+                logger.LogWarning("Completion rejected for expired event lease {EventKey}", lease.EventKey);
+            }
+            else outcome = error is null ? "delivered" : "failed";
+            return true;
+        }
+        finally
+        {
+            activity?.SetTag("outcome", outcome);
+            if (outcome is "failed" or "lease_rejected") activity?.SetStatus(ActivityStatusCode.Error);
+            OperationsTelemetry.RecordDelivery(outcome, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+        }
     }
 }

@@ -109,3 +109,7 @@ SQLite remains a single-host writer architecture. Delivery is at least once and 
 Sign in as Supervisor or Administrator and open Integration monitor. Filter the latest 200 events by delivery state or search event IDs, claim IDs, event types and errors. Select an event to inspect its payload, current attempt cycle and last error. Use Refresh to update delivery state.
 
 In public demo mode, **Simulate downstream failure** creates one synthetic event in the current visitor workspace. Five accelerated failures exercise the local delivery failure path and produce a dead letter without contacting an external endpoint. Select **Retry delivery**, then inspect its Delivered state. Retry resets the attempt cycle; delivered events cannot be retried. Each visitor has an isolated local sink; the simulation endpoint is unavailable outside public demo mode.
+
+## Telemetry showcase
+
+Opt-in OTLP traces and metrics, with a local dashboard: [run and investigate](docs/telemetry-dashboard.md). Export is disabled by default.
