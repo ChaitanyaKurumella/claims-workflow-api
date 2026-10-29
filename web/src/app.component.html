@@ -273,6 +273,13 @@
             </table>
             <div class="empty" *ngIf="!visible.length">
               No claims match this view.
+              <button
+                *ngIf="query || filter !== 'All'"
+                class="quiet"
+                (click)="query = ''; filter = 'All'"
+              >
+                Clear search and filters
+              </button>
             </div>
           </div>
           <div class="table-footer">
